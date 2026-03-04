@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useCallback, useEffect } from 'react'
-import { Account, AccountEntry, AccountType, AppData } from '../types'
+import { Account, AccountEntry, AccountType, AppData, CreditCardAccount, CreditCardEntry } from '../types'
 import { loadData, saveData } from '../utils/storage'
 
 const ACCOUNT_COLORS = [
@@ -23,9 +23,20 @@ function makeEntry(entry: Omit<AccountEntry, 'id' | 'uploadedAt'>): AccountEntry
   return { ...entry, id: crypto.randomUUID(), uploadedAt: new Date().toISOString() }
 }
 
+function makeCCEntry(entry: Omit<CreditCardEntry, 'id' | 'uploadedAt'>): CreditCardEntry {
+  return { ...entry, id: crypto.randomUUID(), uploadedAt: new Date().toISOString() }
+}
+
 interface NewAccountData {
   name: string
   type: AccountType
+  institution: string
+  institutionId?: string
+  accountNumber?: string
+}
+
+interface NewCreditCardAccountData {
+  name: string
   institution: string
   institutionId?: string
   accountNumber?: string
@@ -43,6 +54,15 @@ interface FinanceContextValue {
   ) => void
   deleteEntry: (accountId: string, entryId: string) => void
   replaceData: (data: AppData) => void
+  // Credit card methods
+  addCreditCardAccount: (data: NewCreditCardAccountData) => void
+  deleteCreditCardAccount: (id: string) => void
+  addCreditCardEntry: (accountId: string, entry: Omit<CreditCardEntry, 'id' | 'uploadedAt'>) => void
+  addCreditCardAccountWithEntry: (
+    account: NewCreditCardAccountData,
+    entry: Omit<CreditCardEntry, 'id' | 'uploadedAt'>,
+  ) => void
+  deleteCreditCardEntry: (accountId: string, entryId: string) => void
 }
 
 const FinanceContext = createContext<FinanceContextValue | null>(null)
@@ -128,9 +148,104 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
     setData(newData)
   }, [])
 
+  // ─── Credit card methods ───────────────────────────────────────────────────
+
+  const addCreditCardAccount = useCallback((accountData: NewCreditCardAccountData) => {
+    setData((prev) => {
+      const allColors = [
+        ...prev.accounts.map((a) => a.color),
+        ...prev.creditCardAccounts.map((a) => a.color),
+      ]
+      const color = pickColor(allColors, prev.creditCardAccounts.length)
+      const account: CreditCardAccount = {
+        id: crypto.randomUUID(),
+        name: accountData.name,
+        institution: accountData.institution,
+        institutionId: accountData.institutionId,
+        accountNumber: accountData.accountNumber,
+        color,
+        entries: [],
+      }
+      return { ...prev, creditCardAccounts: [...prev.creditCardAccounts, account] }
+    })
+  }, [])
+
+  const deleteCreditCardAccount = useCallback((id: string) => {
+    setData((prev) => ({
+      ...prev,
+      creditCardAccounts: prev.creditCardAccounts.filter((a) => a.id !== id),
+    }))
+  }, [])
+
+  const addCreditCardEntry = useCallback(
+    (accountId: string, entry: Omit<CreditCardEntry, 'id' | 'uploadedAt'>) => {
+      setData((prev) => ({
+        ...prev,
+        creditCardAccounts: prev.creditCardAccounts.map((a) => {
+          if (a.id !== accountId) return a
+          // Replace entry with same statementEndDate
+          const filtered = a.entries.filter((e) => e.statementEndDate !== entry.statementEndDate)
+          return {
+            ...a,
+            entries: [...filtered, makeCCEntry(entry)].sort((x, y) =>
+              x.statementEndDate.localeCompare(y.statementEndDate),
+            ),
+          }
+        }),
+      }))
+    },
+    [],
+  )
+
+  const addCreditCardAccountWithEntry = useCallback(
+    (accountData: NewCreditCardAccountData, entry: Omit<CreditCardEntry, 'id' | 'uploadedAt'>) => {
+      setData((prev) => {
+        const allColors = [
+          ...prev.accounts.map((a) => a.color),
+          ...prev.creditCardAccounts.map((a) => a.color),
+        ]
+        const color = pickColor(allColors, prev.creditCardAccounts.length)
+        const newAccount: CreditCardAccount = {
+          id: crypto.randomUUID(),
+          name: accountData.name,
+          institution: accountData.institution,
+          institutionId: accountData.institutionId,
+          accountNumber: accountData.accountNumber,
+          color,
+          entries: [makeCCEntry(entry)],
+        }
+        return { ...prev, creditCardAccounts: [...prev.creditCardAccounts, newAccount] }
+      })
+    },
+    [],
+  )
+
+  const deleteCreditCardEntry = useCallback((accountId: string, entryId: string) => {
+    setData((prev) => ({
+      ...prev,
+      creditCardAccounts: prev.creditCardAccounts.map((a) => {
+        if (a.id !== accountId) return a
+        return { ...a, entries: a.entries.filter((e) => e.id !== entryId) }
+      }),
+    }))
+  }, [])
+
   return (
     <FinanceContext.Provider
-      value={{ data, addAccount, deleteAccount, addEntry, addAccountWithEntry, deleteEntry, replaceData }}
+      value={{
+        data,
+        addAccount,
+        deleteAccount,
+        addEntry,
+        addAccountWithEntry,
+        deleteEntry,
+        replaceData,
+        addCreditCardAccount,
+        deleteCreditCardAccount,
+        addCreditCardEntry,
+        addCreditCardAccountWithEntry,
+        deleteCreditCardEntry,
+      }}
     >
       {children}
     </FinanceContext.Provider>

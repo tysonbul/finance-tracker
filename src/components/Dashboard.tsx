@@ -1,6 +1,8 @@
+import { useState } from 'react'
 import { TrendingUp, TrendingDown, Plus } from 'lucide-react'
 import { useFinance } from '../context/FinanceContext'
 import NetWorthChart from './NetWorthChart'
+import SpendDashboard from './SpendDashboard'
 import { formatCurrencyFull, formatCurrency, formatMonth } from '../utils/formatters'
 
 interface DashboardProps {
@@ -8,9 +10,12 @@ interface DashboardProps {
   onGoToAccount: (id: string) => void
 }
 
+type DashTab = 'save' | 'spend'
+
 export default function Dashboard({ onGoToAccounts, onGoToAccount }: DashboardProps) {
   const { data } = useFinance()
   const { accounts } = data
+  const [tab, setTab] = useState<DashTab>('save')
 
   // Calculate net worth (sum of latest entry per account)
   const latestValues = accounts.map((a) => {
@@ -49,13 +54,41 @@ export default function Dashboard({ onGoToAccounts, onGoToAccount }: DashboardPr
 
   return (
     <div className="p-4 md:p-8 space-y-6 md:space-y-8">
-      {/* Header */}
+      {/* Header + tabs */}
       <div>
-        <h1 className="text-xl md:text-2xl font-bold text-white">Dashboard</h1>
-        <p className="text-sm text-gray-500 mt-0.5">
-          {latestMonth ? `As of ${formatMonth(latestMonth)}` : 'No data yet'}
-        </p>
+        <h1 className="text-xl md:text-2xl font-bold text-white mb-4">Dashboard</h1>
+        <div className="flex gap-1 p-1 bg-[#12151f] border border-[#1e2235] rounded-xl w-fit">
+          <button
+            onClick={() => setTab('save')}
+            className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-all ${
+              tab === 'save'
+                ? 'bg-app-accent text-[#0a0d14]'
+                : 'text-gray-400 hover:text-white'
+            }`}
+          >
+            Save
+          </button>
+          <button
+            onClick={() => setTab('spend')}
+            className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-all ${
+              tab === 'spend'
+                ? 'bg-app-accent text-[#0a0d14]'
+                : 'text-gray-400 hover:text-white'
+            }`}
+          >
+            Spend
+          </button>
+        </div>
       </div>
+
+      {/* Spend tab */}
+      {tab === 'spend' && <SpendDashboard />}
+
+      {/* Save tab content */}
+      {tab === 'save' && <>
+      <p className="text-sm text-gray-500 -mt-4">
+        {latestMonth ? `As of ${formatMonth(latestMonth)}` : 'No data yet'}
+      </p>
 
       {/* Net Worth Hero */}
       <div className="bg-[#12151f] border border-[#1e2235] rounded-2xl p-4 md:p-7">
@@ -162,6 +195,7 @@ export default function Dashboard({ onGoToAccounts, onGoToAccount }: DashboardPr
           </div>
         )}
       </div>
+      </>}
     </div>
   )
 }

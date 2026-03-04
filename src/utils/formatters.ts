@@ -28,3 +28,20 @@ export const currentYearMonth = (): string => {
   const now = new Date()
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
 }
+
+export const formatDate = (isoDate: string): string => {
+  const [year, month, day] = isoDate.split('-').map(Number)
+  const d = new Date(year, month - 1, day)
+  return d.toLocaleDateString('en-CA', { month: 'short', day: 'numeric' })
+}
+
+export const formatDateLong = (isoDate: string): string => {
+  const [year, month, day] = isoDate.split('-').map(Number)
+  const d = new Date(year, month - 1, day)
+  return d.toLocaleDateString('en-CA', { month: 'long', day: 'numeric', year: 'numeric' })
+}
+
+export const currentISODate = (): string => {
+  const now = new Date()
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+}

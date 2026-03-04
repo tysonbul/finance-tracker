@@ -1,4 +1,4 @@
-import { AccountType, ParsedStatement, PdfCandidate } from '../types'
+import { AccountType, ParsedStatement, ParsedCreditCardStatement, PdfCandidate } from '../types'
 
 // ─── Generic helpers ──────────────────────────────────────────────────────────
 
@@ -48,7 +48,24 @@ function genericCandidates(text: string): PdfCandidate[] {
   return candidates.slice(0, 8)
 }
 
-// ─── Wealthsimple parser ──────────────────────────────────────────────────────
+// ─── Date parsing helper ──────────────────────────────────────────────────────
+
+const MONTH_MAP: Record<string, number> = {
+  jan: 1, feb: 2, mar: 3, apr: 4, may: 5, jun: 6,
+  jul: 7, aug: 8, sep: 9, oct: 10, nov: 11, dec: 12,
+}
+
+function parseWrittenDate(str: string): string | null {
+  const m = str.trim().match(/([a-zA-Z]+)\s+(\d{1,2}),?\s*(\d{4})/)
+  if (!m) return null
+  const month = MONTH_MAP[m[1].toLowerCase().slice(0, 3)]
+  if (!month) return null
+  const day = parseInt(m[2])
+  const year = parseInt(m[3])
+  return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+}
+
+// ─── Wealthsimple savings parser ──────────────────────────────────────────────
 
 const WS_ACCOUNT_TYPES: { pattern: RegExp; type: AccountType; label: string }[] = [
   { pattern: /Self-directed TFSA Account/i, type: 'TFSA', label: 'Self-directed TFSA Account' },
@@ -65,6 +82,10 @@ function isWealthsimple(text: string): boolean {
     /wealthsimple/i.test(text) ||
     (/ORDER EXECUTION ONLY ACCOUNT/i.test(text) && /Spadina/i.test(text))
   )
+}
+
+function isWealthsimpleCredit(text: string): boolean {
+  return /wealthsimple/i.test(text) && /credit card statement/i.test(text)
 }
 
 function parseWealthsimple(text: string): ParsedStatement {
@@ -145,9 +166,123 @@ function parseWealthsimple(text: string): ParsedStatement {
   }
 }
 
-// ─── Main exported function ───────────────────────────────────────────────────
+// ─── Rogers credit card parser ────────────────────────────────────────────────
 
-export async function parseStatement(file: File): Promise<ParsedStatement> {
+function parseRogers(text: string): ParsedCreditCardStatement {
+  // End date from "Statement Period Dec 9, 2025 - Jan 8, 2026"
+  let statementEndDate: string | null = null
+  let statementEndDateLabel: string | null = null
+  const periodMatch = text.match(
+    /Statement Period\s+[A-Za-z]+\s+\d{1,2},?\s+\d{4}\s*[-–]\s*([A-Za-z]+\s+\d{1,2},?\s+\d{4})/i,
+  )
+  if (periodMatch) {
+    statementEndDate = parseWrittenDate(periodMatch[1])
+    statementEndDateLabel = periodMatch[1].trim()
+  }
+
+  // Balance: "New Balance   $1,627.49" or "Amount Due   $1,627.49"
+  let balance: number | null = null
+  let balanceContext: string | null = null
+  const newBalanceMatch = text.match(/New Balance\s+\$?([\d,]+\.?\d*)/i)
+  if (newBalanceMatch) {
+    balance = parseAmount(newBalanceMatch[1])
+    balanceContext = getContext(text, newBalanceMatch.index!, newBalanceMatch[0].length, 120)
+  }
+  if (balance === null) {
+    const amtDueMatch = text.match(/Amount Due\s+\$?([\d,]+\.?\d*)/i)
+    if (amtDueMatch) {
+      balance = parseAmount(amtDueMatch[1])
+      balanceContext = getContext(text, amtDueMatch.index!, amtDueMatch[0].length, 120)
+    }
+  }
+
+  // Account number: "Account Number   XXXX XXXX XXXX 2616"
+  let accountNumber: string | null = null
+  const acctMatch = text.match(/Account Number\s+([X\d][\sX\d]{10,}[\d]{4})/i)
+  if (acctMatch) {
+    accountNumber = acctMatch[1].trim().replace(/\s+/g, ' ')
+  }
+
+  return {
+    institution: 'Rogers Bank',
+    institutionId: 'rogers',
+    institutionConfidence: 'high',
+    accountNumber,
+    statementEndDate,
+    statementEndDateLabel,
+    balance,
+    balanceContext,
+    candidates: genericCandidates(text),
+  }
+}
+
+// ─── Wealthsimple credit card parser ─────────────────────────────────────────
+
+function parseWealthsimpleCredit(text: string): ParsedCreditCardStatement {
+  // End date from "Dec 25 — Jan 24, 2026" (em dash or en dash)
+  let statementEndDate: string | null = null
+  let statementEndDateLabel: string | null = null
+  const periodMatch = text.match(
+    /[A-Za-z]+\s+\d{1,2}\s*[—–-]+\s*([A-Za-z]+\s+\d{1,2},?\s+\d{4})/,
+  )
+  if (periodMatch) {
+    statementEndDate = parseWrittenDate(periodMatch[1])
+    statementEndDateLabel = periodMatch[1].trim()
+  }
+
+  // Balance: "STATEMENT BAL ANCE  $2,086.31" (OCR space) or "New balance $2,086.31"
+  let balance: number | null = null
+  let balanceContext: string | null = null
+  const stmtBalMatch = text.match(/STATEMENT\s+BAL\s*ANCE\s+\$?([\d,]+\.?\d*)/i)
+  if (stmtBalMatch) {
+    balance = parseAmount(stmtBalMatch[1])
+    balanceContext = getContext(text, stmtBalMatch.index!, stmtBalMatch[0].length, 120)
+  }
+  if (balance === null) {
+    const newBalMatch = text.match(/New\s+balance\s+\$?([\d,]+\.?\d*)/i)
+    if (newBalMatch) {
+      balance = parseAmount(newBalMatch[1])
+      balanceContext = getContext(text, newBalMatch.index!, newBalMatch[0].length, 120)
+    }
+  }
+
+  // Account number: "4126 50** **** 3956"
+  let accountNumber: string | null = null
+  const acctMatch = text.match(/(\d{4}\s+\d{2}\*\*\s+\*\*\*\*\s+\d{4})/)
+  if (acctMatch) {
+    accountNumber = acctMatch[1].trim()
+  }
+
+  return {
+    institution: 'Wealthsimple',
+    institutionId: 'wealthsimple-credit',
+    institutionConfidence: 'high',
+    accountNumber,
+    statementEndDate,
+    statementEndDateLabel,
+    balance,
+    balanceContext,
+    candidates: genericCandidates(text),
+  }
+}
+
+// ─── Auto-detect helper ───────────────────────────────────────────────────────
+
+function isCreditCardText(text: string): boolean {
+  return (
+    /rogers.*bank/i.test(text) ||
+    /rogersbank\.com/i.test(text) ||
+    isWealthsimpleCredit(text)
+  )
+}
+
+export type AutoParseResult =
+  | { kind: 'savings'; result: ParsedStatement }
+  | { kind: 'credit'; result: ParsedCreditCardStatement }
+
+// ─── Main exported functions ──────────────────────────────────────────────────
+
+async function extractFullText(file: File): Promise<string> {
   const pdfjsLib = await import('pdfjs-dist')
   pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`
 
@@ -161,9 +296,13 @@ export async function parseStatement(file: File): Promise<ParsedStatement> {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     pageParts.push(content.items.map((item: any) => item.str).join(' '))
   }
-  const fullText = pageParts.join('\n')
+  return pageParts.join('\n')
+}
 
-  if (isWealthsimple(fullText)) {
+export async function parseStatement(file: File): Promise<ParsedStatement> {
+  const fullText = await extractFullText(file)
+
+  if (isWealthsimple(fullText) && !isWealthsimpleCredit(fullText)) {
     return parseWealthsimple(fullText)
   }
 
@@ -195,5 +334,91 @@ export async function parseStatement(file: File): Promise<ParsedStatement> {
     value: topCandidate?.value ?? null,
     valueContext: topCandidate?.context ?? null,
     candidates,
+  }
+}
+
+export async function parseCreditCardStatement(file: File): Promise<ParsedCreditCardStatement> {
+  const fullText = await extractFullText(file)
+
+  if (/rogers.*bank/i.test(fullText) || /rogersbank\.com/i.test(fullText)) {
+    return parseRogers(fullText)
+  }
+
+  if (isWealthsimpleCredit(fullText)) {
+    return parseWealthsimpleCredit(fullText)
+  }
+
+  // Generic fallback: try to find a statement period end date and top amount
+  const candidates = genericCandidates(fullText)
+  let statementEndDate: string | null = null
+  let statementEndDateLabel: string | null = null
+
+  const periodMatch = fullText.match(
+    /[A-Za-z]+\s+\d{1,2},?\s+\d{4}\s*[-–—]+\s*([A-Za-z]+\s+\d{1,2},?\s+\d{4})/,
+  )
+  if (periodMatch) {
+    statementEndDate = parseWrittenDate(periodMatch[1])
+    statementEndDateLabel = periodMatch[1].trim()
+  }
+
+  const topCandidate = candidates[0] ?? null
+  return {
+    institution: null,
+    institutionId: null,
+    institutionConfidence: 'low',
+    accountNumber: null,
+    statementEndDate,
+    statementEndDateLabel,
+    balance: topCandidate?.value ?? null,
+    balanceContext: topCandidate?.context ?? null,
+    candidates,
+  }
+}
+
+/** Auto-detects statement type and parses accordingly. Use this for the global upload flow. */
+export async function parseAuto(file: File): Promise<AutoParseResult> {
+  const fullText = await extractFullText(file)
+
+  if (isCreditCardText(fullText)) {
+    if (/rogers.*bank/i.test(fullText) || /rogersbank\.com/i.test(fullText)) {
+      return { kind: 'credit', result: parseRogers(fullText) }
+    }
+    return { kind: 'credit', result: parseWealthsimpleCredit(fullText) }
+  }
+
+  if (isWealthsimple(fullText)) {
+    return { kind: 'savings', result: parseWealthsimple(fullText) }
+  }
+
+  // Generic savings fallback
+  const candidates = genericCandidates(fullText)
+  const topCandidate = candidates[0] ?? null
+  let yearMonth: string | null = null
+  let periodLabel: string | null = null
+  const monthMatch = fullText.match(
+    /(?:january|february|march|april|may|june|july|august|september|october|november|december)\s+\d{4}/i,
+  )
+  if (monthMatch) {
+    const d = new Date(monthMatch[0])
+    if (!isNaN(d.getTime())) {
+      yearMonth = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+      periodLabel = d.toLocaleDateString('en-CA', { month: 'long', year: 'numeric' })
+    }
+  }
+  return {
+    kind: 'savings',
+    result: {
+      institution: null,
+      institutionId: null,
+      institutionConfidence: 'low',
+      accountType: null,
+      accountTypeLabel: null,
+      accountNumber: null,
+      yearMonth,
+      periodLabel,
+      value: topCandidate?.value ?? null,
+      valueContext: topCandidate?.context ?? null,
+      candidates,
+    },
   }
 }

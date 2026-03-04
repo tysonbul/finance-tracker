@@ -3,17 +3,17 @@ import {
   X, Upload, CheckCircle, AlertCircle, ChevronRight,
   Building2, Calendar, Hash, Plus, ChevronDown,
 } from 'lucide-react'
-import { Account, AccountType, ParsedStatement } from '../types'
+import { Account, AccountType, ParsedStatement, ParsedCreditCardStatement, CreditCardAccount } from '../types'
 import { useFinance } from '../context/FinanceContext'
-import { parseStatement } from '../utils/pdfParser'
-import { formatCurrencyFull, currentYearMonth } from '../utils/formatters'
+import { parseAuto } from '../utils/pdfParser'
+import { formatCurrencyFull, currentYearMonth, currentISODate } from '../utils/formatters'
 
 const ACCOUNT_TYPES: AccountType[] = [
   'TFSA', 'FHSA', 'RRSP', 'RRIF', 'Non-Registered', 'Pension', 'Cash', 'Other',
 ]
 
 interface UploadModalProps {
-  /** Pre-selected account. Omit to allow user to pick/create in the review step. */
+  /** Pre-selected savings account. Omit to allow user to pick/create in the review step. */
   account?: Account
   onClose: () => void
 }
@@ -31,6 +31,15 @@ function findMatchingAccount(accounts: Account[], parsed: ParsedStatement): Acco
   ) ?? null
 }
 
+function findMatchingCCAccount(accounts: CreditCardAccount[], parsed: ParsedCreditCardStatement): CreditCardAccount | null {
+  if (!parsed.institutionId) return null
+  if (parsed.accountNumber) {
+    const byNum = accounts.find((a) => a.accountNumber === parsed.accountNumber)
+    if (byNum) return byNum
+  }
+  return accounts.find((a) => a.institutionId === parsed.institutionId) ?? null
+}
+
 function defaultAccountName(parsed: ParsedStatement): string {
   const inst = parsed.institution ?? 'Unknown'
   const label = parsed.accountTypeLabel ?? parsed.accountType ?? ''
@@ -41,23 +50,44 @@ function defaultAccountName(parsed: ParsedStatement): string {
   return shortLabel ? `${inst} ${shortLabel}` : inst
 }
 
+function defaultCCAccountName(parsed: ParsedCreditCardStatement): string {
+  const inst = parsed.institution ?? 'Unknown'
+  if (parsed.accountNumber) {
+    const last4 = parsed.accountNumber.replace(/\s/g, '').slice(-4)
+    return `${inst} ••••${last4}`
+  }
+  return `${inst} Credit Card`
+}
+
 export default function UploadModal({ account: preselectedAccount, onClose }: UploadModalProps) {
-  const { data, addEntry, addAccountWithEntry } = useFinance()
+  const { data, addEntry, addAccountWithEntry, addCreditCardEntry, addCreditCardAccountWithEntry } = useFinance()
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const [step, setStep] = useState<Step>('pick')
   const [filename, setFilename] = useState('')
-  const [parsed, setParsed] = useState<ParsedStatement | null>(null)
   const [errorMsg, setErrorMsg] = useState('')
   const [isDragging, setIsDragging] = useState(false)
+  const [showAllCandidates, setShowAllCandidates] = useState(false)
 
+  // Detected mode after parsing
+  const [isCreditCard, setIsCreditCard] = useState(false)
+
+  // Savings state
+  const [parsed, setParsed] = useState<ParsedStatement | null>(null)
   const [manualValue, setManualValue] = useState('')
   const [yearMonth, setYearMonth] = useState(currentYearMonth())
   const [selectedAccountId, setSelectedAccountId] = useState<string | 'new' | null>(null)
   const [newAccountName, setNewAccountName] = useState('')
   const [newAccountType, setNewAccountType] = useState<AccountType>('TFSA')
   const [newAccountInstitution, setNewAccountInstitution] = useState('')
-  const [showAllCandidates, setShowAllCandidates] = useState(false)
+
+  // Credit card state
+  const [ccParsed, setCCParsed] = useState<ParsedCreditCardStatement | null>(null)
+  const [manualBalance, setManualBalance] = useState('')
+  const [statementEndDate, setStatementEndDate] = useState(currentISODate())
+  const [selectedCCAccountId, setSelectedCCAccountId] = useState<string | 'new' | null>(null)
+  const [newCCAccountName, setNewCCAccountName] = useState('')
+  const [newCCAccountInstitution, setNewCCAccountInstitution] = useState('')
 
   const processFile = useCallback(async (file: File) => {
     if (file.type !== 'application/pdf') {
@@ -68,22 +98,42 @@ export default function UploadModal({ account: preselectedAccount, onClose }: Up
     setFilename(file.name)
     setStep('parsing')
     try {
-      const result = await parseStatement(file)
-      setParsed(result)
-      setManualValue(result.value !== null ? String(result.value) : '')
-      setYearMonth(result.yearMonth ?? currentYearMonth())
+      const autoResult = await parseAuto(file)
 
-      if (preselectedAccount) {
-        setSelectedAccountId(preselectedAccount.id)
-      } else {
-        const match = findMatchingAccount(data.accounts, result)
+      if (autoResult.kind === 'credit') {
+        const result = autoResult.result
+        setIsCreditCard(true)
+        setCCParsed(result)
+        setManualBalance(result.balance !== null ? String(result.balance) : '')
+        setStatementEndDate(result.statementEndDate ?? currentISODate())
+
+        const match = findMatchingCCAccount(data.creditCardAccounts, result)
         if (match) {
-          setSelectedAccountId(match.id)
+          setSelectedCCAccountId(match.id)
         } else {
-          setSelectedAccountId('new')
-          setNewAccountName(defaultAccountName(result))
-          setNewAccountType(result.accountType ?? 'Other')
-          setNewAccountInstitution(result.institution ?? '')
+          setSelectedCCAccountId('new')
+          setNewCCAccountName(defaultCCAccountName(result))
+          setNewCCAccountInstitution(result.institution ?? '')
+        }
+      } else {
+        const result = autoResult.result
+        setIsCreditCard(false)
+        setParsed(result)
+        setManualValue(result.value !== null ? String(result.value) : '')
+        setYearMonth(result.yearMonth ?? currentYearMonth())
+
+        if (preselectedAccount) {
+          setSelectedAccountId(preselectedAccount.id)
+        } else {
+          const match = findMatchingAccount(data.accounts, result)
+          if (match) {
+            setSelectedAccountId(match.id)
+          } else {
+            setSelectedAccountId('new')
+            setNewAccountName(defaultAccountName(result))
+            setNewAccountType(result.accountType ?? 'Other')
+            setNewAccountInstitution(result.institution ?? '')
+          }
         }
       }
       setStep('review')
@@ -91,7 +141,7 @@ export default function UploadModal({ account: preselectedAccount, onClose }: Up
       setErrorMsg(err instanceof Error ? err.message : 'Failed to parse PDF')
       setStep('error')
     }
-  }, [data.accounts, preselectedAccount])
+  }, [data.accounts, data.creditCardAccounts, preselectedAccount])
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -106,40 +156,80 @@ export default function UploadModal({ account: preselectedAccount, onClose }: Up
   }
 
   const handleConfirm = () => {
-    const value = parseFloat(manualValue.replace(/,/g, ''))
-    if (isNaN(value) || value <= 0 || !yearMonth) return
-
-    const entryData = { yearMonth, value, sourceFilename: filename }
-
-    if (preselectedAccount) {
-      addEntry(preselectedAccount.id, entryData)
-    } else if (selectedAccountId === 'new') {
-      addAccountWithEntry(
-        {
-          name: newAccountName.trim(),
-          type: newAccountType,
-          institution: newAccountInstitution.trim(),
-          institutionId: parsed?.institutionId ?? undefined,
-          accountNumber: parsed?.accountNumber ?? undefined,
-        },
-        entryData,
-      )
-    } else if (selectedAccountId) {
-      addEntry(selectedAccountId, entryData)
+    if (isCreditCard) {
+      const balance = parseFloat(manualBalance.replace(/,/g, ''))
+      if (isNaN(balance) || balance < 0 || !statementEndDate) return
+      const entryData = { statementEndDate, balance, sourceFilename: filename }
+      if (selectedCCAccountId === 'new') {
+        addCreditCardAccountWithEntry(
+          {
+            name: newCCAccountName.trim(),
+            institution: newCCAccountInstitution.trim(),
+            institutionId: ccParsed?.institutionId ?? undefined,
+            accountNumber: ccParsed?.accountNumber ?? undefined,
+          },
+          entryData,
+        )
+      } else if (selectedCCAccountId) {
+        addCreditCardEntry(selectedCCAccountId, entryData)
+      } else {
+        return
+      }
     } else {
-      return
+      const value = parseFloat(manualValue.replace(/,/g, ''))
+      if (isNaN(value) || value <= 0 || !yearMonth) return
+      const entryData = { yearMonth, value, sourceFilename: filename }
+      if (preselectedAccount) {
+        addEntry(preselectedAccount.id, entryData)
+      } else if (selectedAccountId === 'new') {
+        addAccountWithEntry(
+          {
+            name: newAccountName.trim(),
+            type: newAccountType,
+            institution: newAccountInstitution.trim(),
+            institutionId: parsed?.institutionId ?? undefined,
+            accountNumber: parsed?.accountNumber ?? undefined,
+          },
+          entryData,
+        )
+      } else if (selectedAccountId) {
+        addEntry(selectedAccountId, entryData)
+      } else {
+        return
+      }
     }
     onClose()
   }
 
-  const effectiveValue = parseFloat(manualValue.replace(/,/g, ''))
-  const newAccountValid = !!(newAccountName.trim() && newAccountInstitution.trim())
-  const accountValid = preselectedAccount
-    ? true
-    : selectedAccountId === 'new'
-    ? newAccountValid
-    : !!selectedAccountId
-  const canConfirm = !isNaN(effectiveValue) && effectiveValue > 0 && yearMonth.length === 7 && accountValid
+  const canConfirm = (() => {
+    if (isCreditCard) {
+      const balance = parseFloat(manualBalance.replace(/,/g, ''))
+      const validBalance = !isNaN(balance) && balance >= 0
+      const validDate = statementEndDate.length === 10
+      const validAccount = selectedCCAccountId === 'new'
+        ? !!(newCCAccountName.trim() && newCCAccountInstitution.trim())
+        : !!selectedCCAccountId
+      return validBalance && validDate && validAccount
+    } else {
+      const value = parseFloat(manualValue.replace(/,/g, ''))
+      const validValue = !isNaN(value) && value > 0
+      const validMonth = yearMonth.length === 7
+      const validAccount = preselectedAccount
+        ? true
+        : selectedAccountId === 'new'
+        ? !!(newAccountName.trim() && newAccountInstitution.trim())
+        : !!selectedAccountId
+      return validValue && validMonth && validAccount
+    }
+  })()
+
+  const confirmLabel = isCreditCard
+    ? selectedCCAccountId === 'new' ? 'Add Card & Save Statement' : 'Save Statement'
+    : selectedAccountId === 'new' ? 'Create Account & Save Entry' : 'Save Entry'
+
+  const activeParsed = isCreditCard ? ccParsed : parsed
+  const activeValue = isCreditCard ? ccParsed?.balance : parsed?.value
+  const activeContext = isCreditCard ? ccParsed?.balanceContext : parsed?.valueContext
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -179,7 +269,7 @@ export default function UploadModal({ account: preselectedAccount, onClose }: Up
                 </div>
                 <div className="text-center">
                   <p className="text-sm font-medium text-white">Drop PDF here or click to browse</p>
-                  <p className="text-xs text-gray-500 mt-1">Monthly account statement</p>
+                  <p className="text-xs text-gray-500 mt-1">Investment, savings, or credit card statement</p>
                 </div>
               </div>
             </div>
@@ -213,57 +303,77 @@ export default function UploadModal({ account: preselectedAccount, onClose }: Up
           )}
 
           {/* Review */}
-          {step === 'review' && parsed && (
+          {step === 'review' && activeParsed && (
             <div className="p-4 md:p-6 space-y-5">
 
               {/* Institution badge */}
-              {parsed.institutionConfidence === 'high' && parsed.institution && (
+              {activeParsed.institutionConfidence === 'high' && activeParsed.institution && (
                 <div className="flex items-center gap-3 flex-wrap">
                   <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/20">
                     <div className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-                    <span className="text-xs font-semibold text-emerald-400">{parsed.institution}</span>
+                    <span className="text-xs font-semibold text-emerald-400">{activeParsed.institution}</span>
                     <CheckCircle size={11} className="text-emerald-400" />
                   </div>
-                  {parsed.accountTypeLabel && (
-                    <span className="text-xs text-gray-400">{parsed.accountTypeLabel}</span>
+                  {isCreditCard ? (
+                    <span className="text-xs text-gray-400">Credit Card</span>
+                  ) : (
+                    parsed?.accountTypeLabel && <span className="text-xs text-gray-400">{parsed.accountTypeLabel}</span>
                   )}
                 </div>
               )}
 
-              {/* Period + account number */}
+              {/* Period / Date + account number */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="flex items-center gap-1.5 text-xs font-medium text-gray-400 mb-1.5">
-                    <Calendar size={11} /> Statement Period
-                  </label>
-                  <input
-                    type="month"
-                    value={yearMonth}
-                    onChange={(e) => setYearMonth(e.target.value)}
-                    className="w-full bg-[#0a0d14] border border-[#1e2235] rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-app-accent transition-colors"
-                  />
+                  {isCreditCard ? (
+                    <>
+                      <label className="flex items-center gap-1.5 text-xs font-medium text-gray-400 mb-1.5">
+                        <Calendar size={11} /> Statement End Date
+                      </label>
+                      <input
+                        type="date"
+                        value={statementEndDate}
+                        onChange={(e) => setStatementEndDate(e.target.value)}
+                        className="w-full bg-[#0a0d14] border border-[#1e2235] rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-app-accent transition-colors"
+                      />
+                    </>
+                  ) : (
+                    <>
+                      <label className="flex items-center gap-1.5 text-xs font-medium text-gray-400 mb-1.5">
+                        <Calendar size={11} /> Statement Period
+                      </label>
+                      <input
+                        type="month"
+                        value={yearMonth}
+                        onChange={(e) => setYearMonth(e.target.value)}
+                        className="w-full bg-[#0a0d14] border border-[#1e2235] rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-app-accent transition-colors"
+                      />
+                    </>
+                  )}
                 </div>
-                {parsed.accountNumber && (
+                {activeParsed.accountNumber && (
                   <div>
                     <label className="flex items-center gap-1.5 text-xs font-medium text-gray-400 mb-1.5">
-                      <Hash size={11} /> Account No.
+                      <Hash size={11} /> {isCreditCard ? 'Card Number' : 'Account No.'}
                     </label>
                     <div className="w-full bg-[#0a0d14] border border-[#1e2235] rounded-xl px-3 py-2 text-sm text-gray-400 font-mono truncate">
-                      {parsed.accountNumber}
+                      {activeParsed.accountNumber}
                     </div>
                   </div>
                 )}
               </div>
 
-              {/* Value */}
+              {/* Value / Balance */}
               <div>
-                <label className="block text-xs font-medium text-gray-400 mb-1.5">Account Value</label>
+                <label className="block text-xs font-medium text-gray-400 mb-1.5">
+                  {isCreditCard ? 'Balance / Amount Due' : 'Account Value'}
+                </label>
                 <div className="relative mb-3">
                   <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm">$</span>
                   <input
                     type="number"
-                    value={manualValue}
-                    onChange={(e) => setManualValue(e.target.value)}
+                    value={isCreditCard ? manualBalance : manualValue}
+                    onChange={(e) => isCreditCard ? setManualBalance(e.target.value) : setManualValue(e.target.value)}
                     placeholder="0.00"
                     step="0.01"
                     min="0"
@@ -272,11 +382,11 @@ export default function UploadModal({ account: preselectedAccount, onClose }: Up
                 </div>
 
                 {/* Context quote */}
-                {parsed.valueContext && (() => {
-                  const valStr = parsed.value !== null
-                    ? parsed.value.toLocaleString('en-CA', { minimumFractionDigits: 2 })
+                {activeContext && (() => {
+                  const valStr = activeValue !== null && activeValue !== undefined
+                    ? activeValue.toLocaleString('en-CA', { minimumFractionDigits: 2 })
                     : null
-                  const idx = valStr ? parsed.valueContext.indexOf(valStr) : -1
+                  const idx = valStr ? activeContext.indexOf(valStr) : -1
                   return (
                     <div className="bg-[#0a0d14] border border-[#1e2235] rounded-xl p-3">
                       <p className="text-[10px] text-gray-500 font-medium uppercase tracking-wide mb-1.5">
@@ -284,14 +394,14 @@ export default function UploadModal({ account: preselectedAccount, onClose }: Up
                       </p>
                       <p className="text-xs text-gray-400 leading-relaxed font-mono break-words">
                         {idx === -1 ? (
-                          parsed.valueContext
+                          activeContext
                         ) : (
                           <>
-                            {parsed.valueContext.slice(0, idx)}
+                            {activeContext.slice(0, idx)}
                             <span className="bg-app-accent/20 text-app-accent rounded px-0.5">
                               ${valStr}
                             </span>
-                            {parsed.valueContext.slice(idx + valStr!.length)}
+                            {activeContext.slice(idx + valStr!.length)}
                           </>
                         )}
                       </p>
@@ -300,7 +410,7 @@ export default function UploadModal({ account: preselectedAccount, onClose }: Up
                 })()}
 
                 {/* Other candidates */}
-                {parsed.candidates.length > 1 && (
+                {activeParsed.candidates.length > 1 && (
                   <button
                     onClick={() => setShowAllCandidates((s) => !s)}
                     className="flex items-center gap-1 mt-2 text-xs text-gray-500 hover:text-gray-300 transition-colors"
@@ -311,10 +421,10 @@ export default function UploadModal({ account: preselectedAccount, onClose }: Up
                 )}
                 {showAllCandidates && (
                   <div className="mt-2 space-y-1.5">
-                    {parsed.candidates.filter((c) => c.value !== parsed.value).map((c, i) => (
+                    {activeParsed.candidates.filter((c) => c.value !== activeValue).map((c, i) => (
                       <button
                         key={i}
-                        onClick={() => setManualValue(String(c.value))}
+                        onClick={() => isCreditCard ? setManualBalance(String(c.value)) : setManualValue(String(c.value))}
                         className="w-full text-left p-2.5 rounded-xl border border-[#1e2235] hover:border-[#2a3050] hover:bg-[#1a1e2e] transition-all"
                       >
                         <div className="flex items-center justify-between mb-1">
@@ -328,19 +438,19 @@ export default function UploadModal({ account: preselectedAccount, onClose }: Up
                 )}
               </div>
 
-              {/* Account picker (global upload only) */}
-              {!preselectedAccount && (
+              {/* Account picker */}
+              {isCreditCard ? (
                 <div>
                   <label className="flex items-center gap-1.5 text-xs font-medium text-gray-400 mb-2">
-                    <Building2 size={11} /> Add to Account
+                    <Building2 size={11} /> Add to Card
                   </label>
                   <div className="space-y-1.5">
-                    {data.accounts.map((acc) => {
-                      const isSelected = selectedAccountId === acc.id
+                    {data.creditCardAccounts.map((acc) => {
+                      const isSelected = selectedCCAccountId === acc.id
                       return (
                         <button
                           key={acc.id}
-                          onClick={() => setSelectedAccountId(acc.id)}
+                          onClick={() => setSelectedCCAccountId(acc.id)}
                           className={`w-full flex items-center gap-3 p-3 rounded-xl border text-left transition-all ${
                             isSelected ? 'border-app-accent bg-app-accent-dim' : 'border-[#1e2235] hover:border-[#2a3050] hover:bg-[#1a1e2e]'
                           }`}
@@ -348,63 +458,125 @@ export default function UploadModal({ account: preselectedAccount, onClose }: Up
                           <div className="w-2 h-2 rounded-full shrink-0" style={{ background: acc.color }} />
                           <div className="flex-1 min-w-0">
                             <p className={`text-sm font-medium truncate ${isSelected ? 'text-white' : 'text-gray-300'}`}>{acc.name}</p>
-                            <p className="text-[10px] text-gray-600">{acc.type} · {acc.institution}</p>
+                            <p className="text-[10px] text-gray-600">{acc.institution}</p>
                           </div>
                           {isSelected && <CheckCircle size={14} className="text-app-accent shrink-0" />}
                         </button>
                       )
                     })}
-
                     <button
-                      onClick={() => setSelectedAccountId('new')}
+                      onClick={() => setSelectedCCAccountId('new')}
                       className={`w-full flex items-center gap-3 p-3 rounded-xl border text-left transition-all ${
-                        selectedAccountId === 'new' ? 'border-app-accent bg-app-accent-dim' : 'border-dashed border-[#1e2235] hover:border-[#2a3050] hover:bg-[#1a1e2e]'
+                        selectedCCAccountId === 'new' ? 'border-app-accent bg-app-accent-dim' : 'border-dashed border-[#1e2235] hover:border-[#2a3050] hover:bg-[#1a1e2e]'
                       }`}
                     >
-                      <Plus size={14} className={selectedAccountId === 'new' ? 'text-app-accent' : 'text-gray-500'} />
-                      <span className={`text-sm font-medium ${selectedAccountId === 'new' ? 'text-app-accent' : 'text-gray-400'}`}>
-                        Create new account
+                      <Plus size={14} className={selectedCCAccountId === 'new' ? 'text-app-accent' : 'text-gray-500'} />
+                      <span className={`text-sm font-medium ${selectedCCAccountId === 'new' ? 'text-app-accent' : 'text-gray-400'}`}>
+                        Add new card
                       </span>
                     </button>
                   </div>
-
-                  {selectedAccountId === 'new' && (
+                  {selectedCCAccountId === 'new' && (
                     <div className="mt-3 space-y-3 p-4 bg-[#0a0d14] border border-[#1e2235] rounded-xl">
                       <div>
-                        <label className="block text-[10px] font-medium text-gray-500 mb-1.5">Account Name</label>
+                        <label className="block text-[10px] font-medium text-gray-500 mb-1.5">Card Name</label>
                         <input
                           type="text"
-                          value={newAccountName}
-                          onChange={(e) => setNewAccountName(e.target.value)}
-                          placeholder="e.g. Wealthsimple TFSA"
+                          value={newCCAccountName}
+                          onChange={(e) => setNewCCAccountName(e.target.value)}
+                          placeholder="e.g. Rogers Mastercard ••••2616"
                           className="w-full bg-[#12151f] border border-[#1e2235] rounded-lg px-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-app-accent transition-colors"
                         />
                       </div>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        <div>
-                          <label className="block text-[10px] font-medium text-gray-500 mb-1.5">Type</label>
-                          <select
-                            value={newAccountType}
-                            onChange={(e) => setNewAccountType(e.target.value as AccountType)}
-                            className="w-full bg-[#12151f] border border-[#1e2235] rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-app-accent transition-colors appearance-none"
-                          >
-                            {ACCOUNT_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
-                          </select>
-                        </div>
-                        <div>
-                          <label className="block text-[10px] font-medium text-gray-500 mb-1.5">Institution</label>
-                          <input
-                            type="text"
-                            value={newAccountInstitution}
-                            onChange={(e) => setNewAccountInstitution(e.target.value)}
-                            placeholder="e.g. Wealthsimple"
-                            className="w-full bg-[#12151f] border border-[#1e2235] rounded-lg px-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-app-accent transition-colors"
-                          />
-                        </div>
+                      <div>
+                        <label className="block text-[10px] font-medium text-gray-500 mb-1.5">Institution</label>
+                        <input
+                          type="text"
+                          value={newCCAccountInstitution}
+                          onChange={(e) => setNewCCAccountInstitution(e.target.value)}
+                          placeholder="e.g. Rogers Bank"
+                          className="w-full bg-[#12151f] border border-[#1e2235] rounded-lg px-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-app-accent transition-colors"
+                        />
                       </div>
                     </div>
                   )}
                 </div>
+              ) : (
+                !preselectedAccount && (
+                  <div>
+                    <label className="flex items-center gap-1.5 text-xs font-medium text-gray-400 mb-2">
+                      <Building2 size={11} /> Add to Account
+                    </label>
+                    <div className="space-y-1.5">
+                      {data.accounts.map((acc) => {
+                        const isSelected = selectedAccountId === acc.id
+                        return (
+                          <button
+                            key={acc.id}
+                            onClick={() => setSelectedAccountId(acc.id)}
+                            className={`w-full flex items-center gap-3 p-3 rounded-xl border text-left transition-all ${
+                              isSelected ? 'border-app-accent bg-app-accent-dim' : 'border-[#1e2235] hover:border-[#2a3050] hover:bg-[#1a1e2e]'
+                            }`}
+                          >
+                            <div className="w-2 h-2 rounded-full shrink-0" style={{ background: acc.color }} />
+                            <div className="flex-1 min-w-0">
+                              <p className={`text-sm font-medium truncate ${isSelected ? 'text-white' : 'text-gray-300'}`}>{acc.name}</p>
+                              <p className="text-[10px] text-gray-600">{acc.type} · {acc.institution}</p>
+                            </div>
+                            {isSelected && <CheckCircle size={14} className="text-app-accent shrink-0" />}
+                          </button>
+                        )
+                      })}
+                      <button
+                        onClick={() => setSelectedAccountId('new')}
+                        className={`w-full flex items-center gap-3 p-3 rounded-xl border text-left transition-all ${
+                          selectedAccountId === 'new' ? 'border-app-accent bg-app-accent-dim' : 'border-dashed border-[#1e2235] hover:border-[#2a3050] hover:bg-[#1a1e2e]'
+                        }`}
+                      >
+                        <Plus size={14} className={selectedAccountId === 'new' ? 'text-app-accent' : 'text-gray-500'} />
+                        <span className={`text-sm font-medium ${selectedAccountId === 'new' ? 'text-app-accent' : 'text-gray-400'}`}>
+                          Create new account
+                        </span>
+                      </button>
+                    </div>
+                    {selectedAccountId === 'new' && (
+                      <div className="mt-3 space-y-3 p-4 bg-[#0a0d14] border border-[#1e2235] rounded-xl">
+                        <div>
+                          <label className="block text-[10px] font-medium text-gray-500 mb-1.5">Account Name</label>
+                          <input
+                            type="text"
+                            value={newAccountName}
+                            onChange={(e) => setNewAccountName(e.target.value)}
+                            placeholder="e.g. Wealthsimple TFSA"
+                            className="w-full bg-[#12151f] border border-[#1e2235] rounded-lg px-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-app-accent transition-colors"
+                          />
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <div>
+                            <label className="block text-[10px] font-medium text-gray-500 mb-1.5">Type</label>
+                            <select
+                              value={newAccountType}
+                              onChange={(e) => setNewAccountType(e.target.value as AccountType)}
+                              className="w-full bg-[#12151f] border border-[#1e2235] rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-app-accent transition-colors appearance-none"
+                            >
+                              {ACCOUNT_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+                            </select>
+                          </div>
+                          <div>
+                            <label className="block text-[10px] font-medium text-gray-500 mb-1.5">Institution</label>
+                            <input
+                              type="text"
+                              value={newAccountInstitution}
+                              onChange={(e) => setNewAccountInstitution(e.target.value)}
+                              placeholder="e.g. Wealthsimple"
+                              className="w-full bg-[#12151f] border border-[#1e2235] rounded-lg px-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-app-accent transition-colors"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )
               )}
             </div>
           )}
@@ -417,7 +589,7 @@ export default function UploadModal({ account: preselectedAccount, onClose }: Up
               disabled={!canConfirm}
               className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-app-accent text-[#0a0d14] text-sm font-semibold hover:bg-app-accent-hover transition-all disabled:opacity-40 disabled:cursor-not-allowed"
             >
-              {selectedAccountId === 'new' ? 'Create Account & Save Entry' : 'Save Entry'}
+              {confirmLabel}
               <ChevronRight size={14} />
             </button>
           </div>

@@ -20,6 +20,8 @@ export const parseImportFile = (file: File): Promise<AppData> => {
         if (!data.accounts || !Array.isArray(data.accounts)) {
           throw new Error('Invalid file format: missing accounts array')
         }
+        // Migrate legacy exports that predate creditCardAccounts
+        if (!data.creditCardAccounts) data.creditCardAccounts = []
         resolve(data)
       } catch (err) {
         reject(err instanceof Error ? err : new Error('Invalid JSON file'))
