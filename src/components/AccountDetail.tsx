@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { ArrowLeft, Upload, Trash2, TrendingUp, TrendingDown } from 'lucide-react'
+import { ArrowLeft, Upload, Trash2, TrendingUp, TrendingDown, PenLine } from 'lucide-react'
 import {
   LineChart,
   Line,
@@ -26,9 +26,20 @@ const formatY = (v: number) => {
 }
 
 export default function AccountDetail({ account, onBack }: AccountDetailProps) {
-  const { deleteAccount, deleteEntry } = useFinance()
+  const { deleteAccount, deleteEntry, addEntry } = useFinance()
   const [showUpload, setShowUpload] = useState(false)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [showManualEntry, setShowManualEntry] = useState(false)
+  const [manualMonth, setManualMonth] = useState('')
+  const [manualValue, setManualValue] = useState('')
+
+  const handleManualSave = () => {
+    if (!manualMonth || !manualValue) return
+    addEntry(account.id, { yearMonth: manualMonth, value: parseFloat(manualValue), sourceFilename: 'Manual entry' })
+    setShowManualEntry(false)
+    setManualMonth('')
+    setManualValue('')
+  }
 
   const sorted = [...account.entries].sort((a, b) => a.yearMonth.localeCompare(b.yearMonth))
   const latest = sorted[sorted.length - 1]
@@ -66,6 +77,13 @@ export default function AccountDetail({ account, onBack }: AccountDetailProps) {
         </div>
 
         <div className="flex items-center gap-2 md:shrink-0">
+          <button
+            onClick={() => setShowManualEntry(true)}
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-[#1e2235] text-sm font-semibold text-gray-300 hover:text-white hover:bg-[#1a1e2e] transition-all"
+          >
+            <PenLine size={14} />
+            Manual Entry
+          </button>
           <button
             onClick={() => setShowUpload(true)}
             className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-app-accent text-[#0a0d14] text-sm font-semibold hover:bg-app-accent-hover transition-all"
@@ -208,6 +226,57 @@ export default function AccountDetail({ account, onBack }: AccountDetailProps) {
           </div>
         )}
       </div>
+
+      {/* Manual Entry Modal */}
+      {showManualEntry && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div
+            className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+            onClick={() => setShowManualEntry(false)}
+          />
+          <div className="relative bg-[#12151f] border border-[#1e2235] rounded-2xl p-6 w-full max-w-sm">
+            <h3 className="text-base font-semibold text-white mb-5">Add Manual Entry</h3>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-xs text-gray-400 mb-1.5">Month</label>
+                <input
+                  type="date"
+                  value={manualMonth ? `${manualMonth}-01` : ''}
+                  onChange={(e) => setManualMonth(e.target.value.slice(0, 7))}
+                  className="w-full bg-[#0a0d14] border border-[#1e2235] rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none focus:border-app-accent transition-colors"
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-gray-400 mb-1.5">Value</label>
+                <input
+                  type="number"
+                  value={manualValue}
+                  onChange={(e) => setManualValue(e.target.value)}
+                  placeholder="0.00"
+                  min="0"
+                  step="0.01"
+                  className="w-full bg-[#0a0d14] border border-[#1e2235] rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none focus:border-app-accent transition-colors"
+                />
+              </div>
+            </div>
+            <div className="flex gap-3 mt-6">
+              <button
+                onClick={() => setShowManualEntry(false)}
+                className="flex-1 px-4 py-2.5 rounded-xl border border-[#1e2235] text-sm text-gray-400 hover:text-white transition-all"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleManualSave}
+                disabled={!manualMonth || !manualValue}
+                className="flex-1 px-4 py-2.5 rounded-xl bg-app-accent text-[#0a0d14] text-sm font-semibold hover:bg-app-accent-hover transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                Save
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Upload Modal */}
       {showUpload && <UploadModal account={account} onClose={() => setShowUpload(false)} />}

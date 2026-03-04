@@ -35,14 +35,12 @@ export default function Dashboard({ onGoToAccounts, onGoToAccount }: DashboardPr
   if (allMonths.length >= 2) {
     const latest = allMonths[allMonths.length - 1]
     const previous = allMonths[allMonths.length - 2]
-    const latestTotal = accounts.reduce((sum, a) => {
-      const e = a.entries.find((x) => x.yearMonth === latest)
-      return sum + (e?.value ?? 0)
-    }, 0)
-    const prevTotal = accounts.reduce((sum, a) => {
-      const e = a.entries.find((x) => x.yearMonth === previous)
-      return sum + (e?.value ?? 0)
-    }, 0)
+    const lastSeen = (a: typeof accounts[0], upTo: string) =>
+      [...a.entries]
+        .filter((e) => e.yearMonth <= upTo)
+        .sort((x, y) => y.yearMonth.localeCompare(x.yearMonth))[0]?.value ?? 0
+    const latestTotal = accounts.reduce((sum, a) => sum + lastSeen(a, latest), 0)
+    const prevTotal = accounts.reduce((sum, a) => sum + lastSeen(a, previous), 0)
     if (prevTotal > 0) {
       changeAmount = latestTotal - prevTotal
       changePct = (changeAmount / prevTotal) * 100
