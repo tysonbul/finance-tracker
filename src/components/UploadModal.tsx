@@ -5,7 +5,7 @@ import {
 } from 'lucide-react'
 import { Account, AccountType, ParsedStatement, ParsedCreditCardStatement, CreditCardAccount } from '../types'
 import { useFinance } from '../context/FinanceContext'
-import { parseAuto } from '../utils/pdfParser'
+import { parseAuto, AutoParseResult } from '../utils/pdfParser'
 import { formatCurrencyFull, currentYearMonth, currentISODate } from '../utils/formatters'
 
 const ACCOUNT_TYPES: AccountType[] = [
@@ -18,7 +18,17 @@ interface UploadModalProps {
   onClose: () => void
 }
 
-type Step = 'pick' | 'parsing' | 'review' | 'error'
+type Step = 'pick' | 'parsing' | 'bulk-parsing' | 'review' | 'error'
+
+type QueueItem = {
+  file: File
+  result: AutoParseResult
+}
+
+type QueueErrorItem = {
+  file: File
+  error: string
+}
 
 function findMatchingAccount(accounts: Account[], parsed: ParsedStatement): Account | null {
   if (!parsed.institutionId) return null
@@ -69,6 +79,13 @@ export default function UploadModal({ account: preselectedAccount, onClose }: Up
   const [isDragging, setIsDragging] = useState(false)
   const [showAllCandidates, setShowAllCandidates] = useState(false)
 
+  // Bulk queue state
+  const [queue, setQueue] = useState<QueueItem[]>([])
+  const [queueErrors, setQueueErrors] = useState<QueueErrorItem[]>([])
+  const [queueIndex, setQueueIndex] = useState(0)
+  const [parsedCount, setParsedCount] = useState(0)
+  const [totalCount, setTotalCount] = useState(0)
+
   // Detected mode after parsing
   const [isCreditCard, setIsCreditCard] = useState(false)
 
@@ -89,6 +106,46 @@ export default function UploadModal({ account: preselectedAccount, onClose }: Up
   const [newCCAccountName, setNewCCAccountName] = useState('')
   const [newCCAccountInstitution, setNewCCAccountInstitution] = useState('')
 
+  const loadResultIntoState = useCallback((result: AutoParseResult, file: File) => {
+    setFilename(file.name)
+    if (result.kind === 'credit') {
+      const r = result.result
+      setIsCreditCard(true)
+      setCCParsed(r)
+      setManualBalance(r.balance !== null ? String(r.balance) : '')
+      setStatementEndDate(r.statementEndDate ?? currentISODate())
+
+      const match = findMatchingCCAccount(data.creditCardAccounts, r)
+      if (match) {
+        setSelectedCCAccountId(match.id)
+      } else {
+        setSelectedCCAccountId('new')
+        setNewCCAccountName(defaultCCAccountName(r))
+        setNewCCAccountInstitution(r.institution ?? '')
+      }
+    } else {
+      const r = result.result
+      setIsCreditCard(false)
+      setParsed(r)
+      setManualValue(r.value !== null ? String(r.value) : '')
+      setYearMonth(r.yearMonth ?? currentYearMonth())
+
+      if (preselectedAccount) {
+        setSelectedAccountId(preselectedAccount.id)
+      } else {
+        const match = findMatchingAccount(data.accounts, r)
+        if (match) {
+          setSelectedAccountId(match.id)
+        } else {
+          setSelectedAccountId('new')
+          setNewAccountName(defaultAccountName(r))
+          setNewAccountType(r.accountType ?? 'Other')
+          setNewAccountInstitution(r.institution ?? '')
+        }
+      }
+    }
+  }, [data.accounts, data.creditCardAccounts, preselectedAccount])
+
   const processFile = useCallback(async (file: File) => {
     if (file.type !== 'application/pdf') {
       setErrorMsg('Please select a PDF file.')
@@ -99,61 +156,98 @@ export default function UploadModal({ account: preselectedAccount, onClose }: Up
     setStep('parsing')
     try {
       const autoResult = await parseAuto(file)
-
-      if (autoResult.kind === 'credit') {
-        const result = autoResult.result
-        setIsCreditCard(true)
-        setCCParsed(result)
-        setManualBalance(result.balance !== null ? String(result.balance) : '')
-        setStatementEndDate(result.statementEndDate ?? currentISODate())
-
-        const match = findMatchingCCAccount(data.creditCardAccounts, result)
-        if (match) {
-          setSelectedCCAccountId(match.id)
-        } else {
-          setSelectedCCAccountId('new')
-          setNewCCAccountName(defaultCCAccountName(result))
-          setNewCCAccountInstitution(result.institution ?? '')
-        }
-      } else {
-        const result = autoResult.result
-        setIsCreditCard(false)
-        setParsed(result)
-        setManualValue(result.value !== null ? String(result.value) : '')
-        setYearMonth(result.yearMonth ?? currentYearMonth())
-
-        if (preselectedAccount) {
-          setSelectedAccountId(preselectedAccount.id)
-        } else {
-          const match = findMatchingAccount(data.accounts, result)
-          if (match) {
-            setSelectedAccountId(match.id)
-          } else {
-            setSelectedAccountId('new')
-            setNewAccountName(defaultAccountName(result))
-            setNewAccountType(result.accountType ?? 'Other')
-            setNewAccountInstitution(result.institution ?? '')
-          }
-        }
-      }
+      loadResultIntoState(autoResult, file)
       setStep('review')
     } catch (err) {
       setErrorMsg(err instanceof Error ? err.message : 'Failed to parse PDF')
       setStep('error')
     }
-  }, [data.accounts, data.creditCardAccounts, preselectedAccount])
+  }, [loadResultIntoState])
+
+  const processFilesBulk = useCallback(async (files: File[]) => {
+    const pdfs = Array.from(files).filter((f) => f.type === 'application/pdf')
+    if (pdfs.length === 0) {
+      setErrorMsg('Please select PDF files.')
+      setStep('error')
+      return
+    }
+    if (pdfs.length === 1) {
+      processFile(pdfs[0])
+      return
+    }
+
+    setTotalCount(pdfs.length)
+    setParsedCount(0)
+    setStep('bulk-parsing')
+
+    const successes: QueueItem[] = []
+    const errors: QueueErrorItem[] = []
+
+    await Promise.all(pdfs.map(async (file) => {
+      try {
+        const result = await parseAuto(file)
+        successes.push({ file, result })
+      } catch (err) {
+        errors.push({ file, error: err instanceof Error ? err.message : 'Failed to parse PDF' })
+      }
+      setParsedCount((c) => c + 1)
+    }))
+
+    // Sort successes to match original file order
+    const orderedSuccesses = pdfs
+      .map((f) => successes.find((s) => s.file === f))
+      .filter((s): s is QueueItem => s !== undefined)
+
+    setQueueErrors(errors)
+
+    if (orderedSuccesses.length === 0) {
+      setErrorMsg(`All ${pdfs.length} files failed to parse.`)
+      setStep('error')
+      return
+    }
+
+    setQueue(orderedSuccesses)
+    setQueueIndex(0)
+    loadResultIntoState(orderedSuccesses[0].result, orderedSuccesses[0].file)
+    setShowAllCandidates(false)
+    setStep('review')
+  }, [processFile, loadResultIntoState])
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (file) processFile(file)
+    const files = e.target.files
+    if (!files || files.length === 0) return
+    if (files.length === 1) {
+      processFile(files[0])
+    } else {
+      processFilesBulk(Array.from(files))
+    }
   }
 
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault()
     setIsDragging(false)
-    const file = e.dataTransfer.files[0]
-    if (file) processFile(file)
+    const files = e.dataTransfer.files
+    if (!files || files.length === 0) return
+    if (files.length === 1) {
+      processFile(files[0])
+    } else {
+      processFilesBulk(Array.from(files))
+    }
   }
+
+  const isBulkMode = queue.length > 1
+  const isLastItem = !isBulkMode || queueIndex >= queue.length - 1
+
+  const advanceQueue = useCallback(() => {
+    const next = queueIndex + 1
+    if (next >= queue.length) {
+      onClose()
+    } else {
+      setQueueIndex(next)
+      loadResultIntoState(queue[next].result, queue[next].file)
+      setShowAllCandidates(false)
+    }
+  }, [queueIndex, queue, onClose, loadResultIntoState])
 
   const handleConfirm = () => {
     if (isCreditCard) {
@@ -198,8 +292,15 @@ export default function UploadModal({ account: preselectedAccount, onClose }: Up
         return
       }
     }
-    onClose()
+
+    if (isBulkMode) {
+      advanceQueue()
+    } else {
+      onClose()
+    }
   }
+
+  const handleSkip = () => advanceQueue()
 
   const canConfirm = (() => {
     if (isCreditCard) {
@@ -223,9 +324,12 @@ export default function UploadModal({ account: preselectedAccount, onClose }: Up
     }
   })()
 
-  const confirmLabel = isCreditCard
-    ? selectedCCAccountId === 'new' ? 'Add Card & Save Statement' : 'Save Statement'
-    : selectedAccountId === 'new' ? 'Create Account & Save Entry' : 'Save Entry'
+  const confirmLabel = (() => {
+    if (isBulkMode) return isLastItem ? 'Save & Finish' : 'Save & Next'
+    return isCreditCard
+      ? selectedCCAccountId === 'new' ? 'Add Card & Save Statement' : 'Save Statement'
+      : selectedAccountId === 'new' ? 'Create Account & Save Entry' : 'Save Entry'
+  })()
 
   const activeParsed = isCreditCard ? ccParsed : parsed
   const activeValue = isCreditCard ? ccParsed?.balance : parsed?.value
@@ -240,9 +344,14 @@ export default function UploadModal({ account: preselectedAccount, onClose }: Up
         <div className="flex items-center justify-between px-6 py-5 border-b border-[#1e2235] shrink-0">
           <div>
             <h2 className="text-base font-semibold text-white">Upload Statement</h2>
-            {preselectedAccount && (
+            {isBulkMode && step === 'review' ? (
+              <p className="text-xs text-gray-500 mt-0.5">
+                {queueIndex + 1} of {queue.length}
+                {queueErrors.length > 0 && ` · ${queueErrors.length} failed`}
+              </p>
+            ) : preselectedAccount ? (
               <p className="text-xs text-gray-500 mt-0.5">{preselectedAccount.name}</p>
-            )}
+            ) : null}
           </div>
           <button onClick={onClose} className="text-gray-500 hover:text-white transition-colors p-1 rounded-lg hover:bg-[#1e2235]">
             <X size={18} />
@@ -254,7 +363,7 @@ export default function UploadModal({ account: preselectedAccount, onClose }: Up
           {/* Pick */}
           {step === 'pick' && (
             <div className="p-4 md:p-6">
-              <input ref={fileInputRef} type="file" accept="application/pdf" className="hidden" onChange={handleFileChange} />
+              <input ref={fileInputRef} type="file" accept="application/pdf" multiple className="hidden" onChange={handleFileChange} />
               <div
                 onClick={() => fileInputRef.current?.click()}
                 onDragOver={(e) => { e.preventDefault(); setIsDragging(true) }}
@@ -268,20 +377,38 @@ export default function UploadModal({ account: preselectedAccount, onClose }: Up
                   <Upload size={20} className="text-gray-400" />
                 </div>
                 <div className="text-center">
-                  <p className="text-sm font-medium text-white">Drop PDF here or click to browse</p>
-                  <p className="text-xs text-gray-500 mt-1">Investment, savings, or credit card statement</p>
+                  <p className="text-sm font-medium text-white">Drop PDFs here or click to browse</p>
+                  <p className="text-xs text-gray-500 mt-1">Select one or multiple statement files</p>
                 </div>
               </div>
             </div>
           )}
 
-          {/* Parsing */}
+          {/* Single-file parsing */}
           {step === 'parsing' && (
             <div className="p-6 flex flex-col items-center gap-4 py-14">
               <div className="w-10 h-10 border-2 border-app-accent border-t-transparent rounded-full animate-spin" />
               <div className="text-center">
                 <p className="text-sm font-medium text-white">Reading statement…</p>
                 <p className="text-xs text-gray-500 mt-1 truncate max-w-xs">{filename}</p>
+              </div>
+            </div>
+          )}
+
+          {/* Bulk parsing */}
+          {step === 'bulk-parsing' && (
+            <div className="p-6 flex flex-col items-center gap-4 py-14">
+              <div className="w-10 h-10 border-2 border-app-accent border-t-transparent rounded-full animate-spin" />
+              <div className="text-center">
+                <p className="text-sm font-medium text-white">Parsing statements…</p>
+                <p className="text-xs text-gray-500 mt-1">{parsedCount} of {totalCount} done</p>
+              </div>
+              {/* Progress bar */}
+              <div className="w-48 h-1 bg-[#1e2235] rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-app-accent rounded-full transition-all duration-300"
+                  style={{ width: totalCount > 0 ? `${(parsedCount / totalCount) * 100}%` : '0%' }}
+                />
               </div>
             </div>
           )}
@@ -305,6 +432,14 @@ export default function UploadModal({ account: preselectedAccount, onClose }: Up
           {/* Review */}
           {step === 'review' && activeParsed && (
             <div className="p-4 md:p-6 space-y-5">
+
+              {/* Filename in bulk mode */}
+              {isBulkMode && (
+                <div className="flex items-center gap-2 p-3 bg-[#0a0d14] border border-[#1e2235] rounded-xl">
+                  <Upload size={12} className="text-gray-500 shrink-0" />
+                  <p className="text-xs text-gray-400 truncate font-mono">{filename}</p>
+                </div>
+              )}
 
               {/* Institution badge */}
               {activeParsed.institutionConfidence === 'high' && activeParsed.institution && (
@@ -583,11 +718,19 @@ export default function UploadModal({ account: preselectedAccount, onClose }: Up
         </div>
 
         {step === 'review' && (
-          <div className="px-6 py-4 border-t border-[#1e2235] shrink-0">
+          <div className="px-6 py-4 border-t border-[#1e2235] shrink-0 flex gap-3">
+            {isBulkMode && (
+              <button
+                onClick={handleSkip}
+                className="flex-1 px-4 py-3 rounded-xl border border-[#1e2235] text-sm text-gray-400 hover:text-white hover:border-[#2a3050] hover:bg-[#1a1e2e] transition-all font-medium"
+              >
+                Skip
+              </button>
+            )}
             <button
               onClick={handleConfirm}
               disabled={!canConfirm}
-              className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-app-accent text-[#0a0d14] text-sm font-semibold hover:bg-app-accent-hover transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+              className="flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-app-accent text-[#0a0d14] text-sm font-semibold hover:bg-app-accent-hover transition-all disabled:opacity-40 disabled:cursor-not-allowed"
             >
               {confirmLabel}
               <ChevronRight size={14} />
