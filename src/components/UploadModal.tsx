@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from 'react'
+import { useState, useRef, useCallback, useEffect } from 'react'
 import {
   X, Upload, CheckCircle, AlertCircle, ChevronRight,
   Building2, Calendar, Hash, Plus, ChevronDown,
@@ -105,6 +105,11 @@ export default function UploadModal({ account: preselectedAccount, onClose }: Up
   const [selectedCCAccountId, setSelectedCCAccountId] = useState<string | 'new' | null>(null)
   const [newCCAccountName, setNewCCAccountName] = useState('')
   const [newCCAccountInstitution, setNewCCAccountInstitution] = useState('')
+
+  // Deferred queue advance: set to true in handleConfirm so the effect runs
+  // after React commits the new account to state — preventing the stale-closure
+  // bug where the next queue item's loadResultIntoState sees an empty account list.
+  const [shouldAdvanceQueue, setShouldAdvanceQueue] = useState(false)
 
   const loadResultIntoState = useCallback((result: AutoParseResult, file: File) => {
     setFilename(file.name)
@@ -249,6 +254,14 @@ export default function UploadModal({ account: preselectedAccount, onClose }: Up
     }
   }, [queueIndex, queue, onClose, loadResultIntoState])
 
+  // Run the queue advance AFTER React commits new account state, so that
+  // loadResultIntoState sees the account created by the previous confirmation.
+  useEffect(() => {
+    if (!shouldAdvanceQueue) return
+    setShouldAdvanceQueue(false)
+    advanceQueue()
+  }, [shouldAdvanceQueue, advanceQueue])
+
   const handleConfirm = () => {
     if (isCreditCard) {
       const balance = parseFloat(manualBalance.replace(/,/g, ''))
@@ -294,7 +307,13 @@ export default function UploadModal({ account: preselectedAccount, onClose }: Up
     }
 
     if (isBulkMode) {
-      advanceQueue()
+      if (isLastItem) {
+        onClose()
+      } else {
+        // Defer so React commits the new account to state before we call
+        // loadResultIntoState for the next item (see shouldAdvanceQueue effect).
+        setShouldAdvanceQueue(true)
+      }
     } else {
       onClose()
     }

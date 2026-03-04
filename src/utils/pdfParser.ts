@@ -68,13 +68,22 @@ function parseWrittenDate(str: string): string | null {
 // ─── Wealthsimple savings parser ──────────────────────────────────────────────
 
 const WS_ACCOUNT_TYPES: { pattern: RegExp; type: AccountType; label: string }[] = [
-  { pattern: /Self-directed TFSA Account/i, type: 'TFSA', label: 'Self-directed TFSA Account' },
-  { pattern: /Self-directed FHSA Account/i, type: 'FHSA', label: 'Self-directed FHSA Account' },
-  { pattern: /Self-directed RRSP Account/i, type: 'RRSP', label: 'Self-directed RRSP Account' },
-  { pattern: /Self-directed RRIF Account/i, type: 'RRIF', label: 'Self-directed RRIF Account' },
-  { pattern: /Crypto Account/i, type: 'Other', label: 'Crypto Account' },
-  { pattern: /Non-registered Account/i, type: 'Non-Registered', label: 'Non-registered Account' },
-  { pattern: /Chequing (monthly )?statement/i, type: 'Cash', label: 'Chequing Account' },
+  // Current Wealthsimple statement format: "[Type] SDI Cash Account"
+  { pattern: /Tax-Free Savings SDI/i,        type: 'TFSA',           label: 'Tax-Free Savings Account' },
+  { pattern: /First Home Savings SDI/i,      type: 'FHSA',           label: 'First Home Savings Account' },
+  { pattern: /\bRRSP SDI\b/i,               type: 'RRSP',           label: 'RRSP Account' },
+  { pattern: /\bRRIF SDI\b/i,               type: 'RRIF',           label: 'RRIF Account' },
+  { pattern: /\bLIRA\b/i,                   type: 'LIRA',           label: 'LIRA Account' },
+  { pattern: /Crypto Account/i,             type: 'Other',          label: 'Crypto Account' },
+  { pattern: /Non-Registered SDI/i,         type: 'Non-Registered', label: 'Non-Registered Account' },
+  { pattern: /Cash\s+monthly\s+statement/i, type: 'Cash',           label: 'Chequing Account' },
+  // Legacy patterns (older statement format)
+  { pattern: /Self-directed TFSA Account/i, type: 'TFSA',           label: 'Self-directed TFSA Account' },
+  { pattern: /Self-directed FHSA Account/i, type: 'FHSA',           label: 'Self-directed FHSA Account' },
+  { pattern: /Self-directed RRSP Account/i, type: 'RRSP',           label: 'Self-directed RRSP Account' },
+  { pattern: /Self-directed RRIF Account/i, type: 'RRIF',           label: 'Self-directed RRIF Account' },
+  { pattern: /Non-registered Account/i,     type: 'Non-Registered', label: 'Non-registered Account' },
+  { pattern: /Chequing.*statement/i,        type: 'Cash',           label: 'Chequing Account' },
 ]
 
 function isWealthsimple(text: string): boolean {
@@ -88,7 +97,7 @@ function isWealthsimpleCredit(text: string): boolean {
   return /wealthsimple/i.test(text) && /credit card statement/i.test(text)
 }
 
-function parseWealthsimple(text: string): ParsedStatement {
+export function parseWealthsimple(text: string): ParsedStatement {
   let accountType: AccountType | null = null
   let accountTypeLabel: string | null = null
   for (const { pattern, type, label } of WS_ACCOUNT_TYPES) {
@@ -168,7 +177,7 @@ function parseWealthsimple(text: string): ParsedStatement {
 
 // ─── Rogers credit card parser ────────────────────────────────────────────────
 
-function parseRogers(text: string): ParsedCreditCardStatement {
+export function parseRogers(text: string): ParsedCreditCardStatement {
   // End date from "Statement Period Dec 9, 2025 - Jan 8, 2026"
   let statementEndDate: string | null = null
   let statementEndDateLabel: string | null = null
@@ -218,7 +227,7 @@ function parseRogers(text: string): ParsedCreditCardStatement {
 
 // ─── Wealthsimple credit card parser ─────────────────────────────────────────
 
-function parseWealthsimpleCredit(text: string): ParsedCreditCardStatement {
+export function parseWealthsimpleCredit(text: string): ParsedCreditCardStatement {
   // End date from "Dec 25 — Jan 24, 2026" (em dash or en dash)
   let statementEndDate: string | null = null
   let statementEndDateLabel: string | null = null
@@ -268,12 +277,19 @@ function parseWealthsimpleCredit(text: string): ParsedCreditCardStatement {
 
 // ─── Auto-detect helper ───────────────────────────────────────────────────────
 
-function isCreditCardText(text: string): boolean {
+export { isWealthsimple, isWealthsimpleCredit }
+
+function isRogersBank(text: string): boolean {
+  // Require rogersbank.com domain OR "rogers bank" combined with a CC-specific phrase.
+  // Plain "Rogers Bank" can appear as a bill-payment payee in chequing statements.
   return (
-    /rogers.*bank/i.test(text) ||
     /rogersbank\.com/i.test(text) ||
-    isWealthsimpleCredit(text)
+    (/rogers.*bank/i.test(text) && /new balance|statement period|minimum payment/i.test(text))
   )
+}
+
+export function isCreditCardText(text: string): boolean {
+  return isRogersBank(text) || isWealthsimpleCredit(text)
 }
 
 export type AutoParseResult =
@@ -340,7 +356,7 @@ export async function parseStatement(file: File): Promise<ParsedStatement> {
 export async function parseCreditCardStatement(file: File): Promise<ParsedCreditCardStatement> {
   const fullText = await extractFullText(file)
 
-  if (/rogers.*bank/i.test(fullText) || /rogersbank\.com/i.test(fullText)) {
+  if (isRogersBank(fullText)) {
     return parseRogers(fullText)
   }
 
@@ -380,7 +396,7 @@ export async function parseAuto(file: File): Promise<AutoParseResult> {
   const fullText = await extractFullText(file)
 
   if (isCreditCardText(fullText)) {
-    if (/rogers.*bank/i.test(fullText) || /rogersbank\.com/i.test(fullText)) {
+    if (isRogersBank(fullText)) {
       return { kind: 'credit', result: parseRogers(fullText) }
     }
     return { kind: 'credit', result: parseWealthsimpleCredit(fullText) }

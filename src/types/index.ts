@@ -3,6 +3,7 @@ export type AccountType =
   | 'FHSA'
   | 'RRSP'
   | 'RRIF'
+  | 'LIRA'
   | 'Non-Registered'
   | 'Pension'
   | 'Cash'
