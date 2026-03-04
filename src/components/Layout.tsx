@@ -18,8 +18,8 @@ const NAV_ITEMS: { view: View; label: string; Icon: LucideIcon }[] = [
 export default function Layout({ view, onNavigate, onUpload, children }: LayoutProps) {
   return (
     <div className="flex h-full min-h-screen">
-      {/* Sidebar */}
-      <aside className="w-56 shrink-0 flex flex-col border-r border-[#1e2235] bg-[#0d1018]">
+      {/* Sidebar — desktop only */}
+      <aside className="hidden md:flex w-56 shrink-0 flex-col border-r border-[#1e2235] bg-[#0d1018]">
         {/* Brand */}
         <div className="px-5 py-6 border-b border-[#1e2235]">
           <div className="flex items-center gap-2.5">
@@ -72,7 +72,53 @@ export default function Layout({ view, onNavigate, onUpload, children }: LayoutP
       </aside>
 
       {/* Main */}
-      <main className="flex-1 overflow-auto bg-[#0a0d14]">{children}</main>
+      <main className="flex-1 overflow-auto bg-[#0a0d14] pb-20 md:pb-0">{children}</main>
+
+      {/* Bottom nav — mobile only */}
+      <nav className="fixed bottom-0 left-0 right-0 z-40 flex md:hidden border-t border-[#1e2235] bg-[#0d1018]">
+        {NAV_ITEMS.slice(0, 2).map(({ view: v, label, Icon }) => {
+          const active = view === v
+          return (
+            <button
+              key={v}
+              onClick={() => onNavigate(v)}
+              className={`flex-1 flex flex-col items-center gap-1 py-3 text-[10px] font-medium transition-all ${
+                active ? 'text-app-accent' : 'text-gray-500'
+              }`}
+            >
+              <Icon size={20} />
+              {label}
+            </button>
+          )
+        })}
+
+        {/* Upload CTA — center */}
+        <button
+          onClick={onUpload}
+          className="flex-1 flex flex-col items-center gap-1 py-3 text-[10px] font-semibold text-app-accent"
+        >
+          <div className="w-8 h-8 rounded-xl bg-app-accent flex items-center justify-center -mt-1">
+            <Upload size={16} className="text-[#0a0d14]" />
+          </div>
+          Upload
+        </button>
+
+        {NAV_ITEMS.slice(2).map(({ view: v, label, Icon }) => {
+          const active = view === v
+          return (
+            <button
+              key={v}
+              onClick={() => onNavigate(v)}
+              className={`flex-1 flex flex-col items-center gap-1 py-3 text-[10px] font-medium transition-all ${
+                active ? 'text-app-accent' : 'text-gray-500'
+              }`}
+            >
+              <Icon size={20} />
+              {label}
+            </button>
+          )
+        })}
+      </nav>
     </div>
   )
 }

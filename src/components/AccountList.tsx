@@ -17,10 +17,10 @@ export default function AccountList({ onGoToAccount }: AccountListProps) {
   const [uploadingAccount, setUploadingAccount] = useState<Account | null>(null)
 
   return (
-    <div className="p-8 space-y-8">
+    <div className="p-4 md:p-8 space-y-6 md:space-y-8">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-white">Accounts</h1>
+          <h1 className="text-xl md:text-2xl font-bold text-white">Accounts</h1>
           <p className="text-sm text-gray-500 mt-0.5">{accounts.length} account{accounts.length !== 1 ? 's' : ''}</p>
         </div>
         <button
@@ -84,7 +84,7 @@ export default function AccountList({ onGoToAccount }: AccountListProps) {
                     >
                       {account.type}
                     </span>
-                    <span className="text-xs text-gray-500">{account.institution}</span>
+                    <span className="text-xs text-gray-500 truncate">{account.institution}</span>
                   </div>
                   <p className="text-sm font-semibold text-white truncate group-hover:text-app-accent transition-colors">
                     {account.name}
@@ -125,7 +125,7 @@ export default function AccountList({ onGoToAccount }: AccountListProps) {
                     e.stopPropagation()
                     setUploadingAccount(account)
                   }}
-                  className="p-2 rounded-lg border border-[#1e2235] text-gray-500 hover:text-app-accent hover:border-app-accent/40 hover:bg-app-accent-dim transition-all opacity-0 group-hover:opacity-100 shrink-0"
+                  className="p-2 rounded-lg border border-[#1e2235] text-gray-500 hover:text-app-accent hover:border-app-accent/40 hover:bg-app-accent-dim transition-all opacity-100 sm:opacity-0 group-hover:opacity-100 shrink-0"
                   title="Upload statement"
                 >
                   <Upload size={14} />

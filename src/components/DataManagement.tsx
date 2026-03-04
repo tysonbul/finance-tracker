@@ -49,9 +49,9 @@ export default function DataManagement() {
   const totalEntries = data.accounts.reduce((sum, a) => sum + a.entries.length, 0)
 
   return (
-    <div className="p-8 space-y-8 max-w-2xl">
+    <div className="p-4 md:p-8 space-y-6 md:space-y-8 max-w-2xl">
       <div>
-        <h1 className="text-2xl font-bold text-white">Data</h1>
+        <h1 className="text-xl md:text-2xl font-bold text-white">Data</h1>
         <p className="text-sm text-gray-500 mt-0.5">
           {data.accounts.length} accounts · {totalEntries} entries
         </p>
@@ -59,7 +59,7 @@ export default function DataManagement() {
 
       {/* Export */}
       <div className="bg-[#12151f] border border-[#1e2235] rounded-2xl p-6">
-        <div className="flex items-start justify-between gap-4">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <h2 className="text-sm font-semibold text-white mb-1">Export Data</h2>
             <p className="text-xs text-gray-500 leading-relaxed">
@@ -70,7 +70,7 @@ export default function DataManagement() {
           <button
             onClick={handleExport}
             disabled={data.accounts.length === 0}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-app-accent text-[#0a0d14] text-sm font-semibold hover:bg-app-accent-hover transition-all disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-app-accent text-[#0a0d14] text-sm font-semibold hover:bg-app-accent-hover transition-all disabled:opacity-40 disabled:cursor-not-allowed self-start sm:self-auto sm:shrink-0"
           >
             <Download size={14} />
             Export
@@ -80,7 +80,7 @@ export default function DataManagement() {
 
       {/* Import */}
       <div className="bg-[#12151f] border border-[#1e2235] rounded-2xl p-6">
-        <div className="flex items-start justify-between gap-4 mb-4">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between mb-4">
           <div>
             <h2 className="text-sm font-semibold text-white mb-1">Import Data</h2>
             <p className="text-xs text-gray-500 leading-relaxed">
@@ -90,7 +90,7 @@ export default function DataManagement() {
           </div>
           <button
             onClick={() => fileInputRef.current?.click()}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-[#1e2235] text-sm text-gray-300 hover:text-white hover:bg-[#1a1e2e] transition-all shrink-0"
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-[#1e2235] text-sm text-gray-300 hover:text-white hover:bg-[#1a1e2e] transition-all self-start sm:self-auto sm:shrink-0"
           >
             <Upload size={14} />
             Choose File
@@ -153,7 +153,7 @@ export default function DataManagement() {
 
       {/* Clear Data */}
       <div className="bg-[#12151f] border border-red-500/20 rounded-2xl p-6">
-        <div className="flex items-start justify-between gap-4">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <h2 className="text-sm font-semibold text-white mb-1">Clear All Data</h2>
             <p className="text-xs text-gray-500 leading-relaxed">
@@ -164,13 +164,13 @@ export default function DataManagement() {
             <button
               onClick={() => setConfirmClear(true)}
               disabled={data.accounts.length === 0}
-              className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-red-500/30 text-sm text-red-400 hover:bg-red-500/10 transition-all shrink-0 disabled:opacity-40 disabled:cursor-not-allowed"
+              className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-red-500/30 text-sm text-red-400 hover:bg-red-500/10 transition-all self-start sm:self-auto sm:shrink-0 disabled:opacity-40 disabled:cursor-not-allowed"
             >
               <Trash2 size={14} />
               Clear
             </button>
           ) : (
-            <div className="flex gap-2 shrink-0">
+            <div className="flex gap-2 self-start sm:self-auto sm:shrink-0">
               <button
                 onClick={() => setConfirmClear(false)}
                 className="px-3 py-2 rounded-lg border border-[#1e2235] text-xs text-gray-400 hover:text-white transition-all"

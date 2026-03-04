@@ -144,7 +144,7 @@ export default function UploadModal({ account: preselectedAccount, onClose }: Up
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative bg-[#12151f] border border-[#1e2235] rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] flex flex-col">
+      <div className="relative bg-[#12151f] border border-[#1e2235] rounded-2xl shadow-2xl w-full max-w-lg max-h-[85svh] flex flex-col">
 
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-5 border-b border-[#1e2235] shrink-0">
@@ -163,14 +163,14 @@ export default function UploadModal({ account: preselectedAccount, onClose }: Up
 
           {/* Pick */}
           {step === 'pick' && (
-            <div className="p-6">
+            <div className="p-4 md:p-6">
               <input ref={fileInputRef} type="file" accept="application/pdf" className="hidden" onChange={handleFileChange} />
               <div
                 onClick={() => fileInputRef.current?.click()}
                 onDragOver={(e) => { e.preventDefault(); setIsDragging(true) }}
                 onDragLeave={() => setIsDragging(false)}
                 onDrop={handleDrop}
-                className={`border-2 border-dashed rounded-2xl p-10 flex flex-col items-center gap-3 cursor-pointer transition-all ${
+                className={`border-2 border-dashed rounded-2xl p-6 md:p-10 flex flex-col items-center gap-3 cursor-pointer transition-all ${
                   isDragging ? 'border-app-accent bg-app-accent-dim' : 'border-[#1e2235] hover:border-[#2a3050] hover:bg-[#1a1e2e]'
                 }`}
               >
@@ -198,7 +198,7 @@ export default function UploadModal({ account: preselectedAccount, onClose }: Up
 
           {/* Error */}
           {step === 'error' && (
-            <div className="p-6 space-y-4">
+            <div className="p-4 md:p-6 space-y-4">
               <div className="flex items-start gap-3 p-4 bg-red-500/10 border border-red-500/20 rounded-xl">
                 <AlertCircle size={16} className="text-red-400 shrink-0 mt-0.5" />
                 <div>
@@ -214,7 +214,7 @@ export default function UploadModal({ account: preselectedAccount, onClose }: Up
 
           {/* Review */}
           {step === 'review' && parsed && (
-            <div className="p-6 space-y-5">
+            <div className="p-4 md:p-6 space-y-5">
 
               {/* Institution badge */}
               {parsed.institutionConfidence === 'high' && parsed.institution && (
@@ -231,7 +231,7 @@ export default function UploadModal({ account: preselectedAccount, onClose }: Up
               )}
 
               {/* Period + account number */}
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="flex items-center gap-1.5 text-xs font-medium text-gray-400 mb-1.5">
                     <Calendar size={11} /> Statement Period
@@ -380,7 +380,7 @@ export default function UploadModal({ account: preselectedAccount, onClose }: Up
                           className="w-full bg-[#12151f] border border-[#1e2235] rounded-lg px-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-app-accent transition-colors"
                         />
                       </div>
-                      <div className="grid grid-cols-2 gap-3">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div>
                           <label className="block text-[10px] font-medium text-gray-500 mb-1.5">Type</label>
                           <select

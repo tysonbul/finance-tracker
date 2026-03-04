@@ -96,7 +96,7 @@ export default function NetWorthChart({ accounts }: NetWorthChartProps) {
 
   return (
     <ResponsiveContainer width="100%" height="100%">
-      <LineChart data={data} margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
+      <LineChart data={data} margin={{ top: 5, right: 10, left: 5, bottom: 5 }}>
         <CartesianGrid strokeDasharray="3 3" stroke="#1e2235" vertical={false} />
         <XAxis
           dataKey="month"
@@ -112,7 +112,7 @@ export default function NetWorthChart({ accounts }: NetWorthChartProps) {
           axisLine={false}
           tickLine={false}
           dx={-4}
-          width={60}
+          width={45}
         />
         <Tooltip content={<CustomTooltip />} />
         <Legend

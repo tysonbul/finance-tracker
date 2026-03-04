@@ -48,20 +48,20 @@ export default function Dashboard({ onGoToAccounts, onGoToAccount }: DashboardPr
   const latestMonth = allMonths[allMonths.length - 1]
 
   return (
-    <div className="p-8 space-y-8">
+    <div className="p-4 md:p-8 space-y-6 md:space-y-8">
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold text-white">Dashboard</h1>
+        <h1 className="text-xl md:text-2xl font-bold text-white">Dashboard</h1>
         <p className="text-sm text-gray-500 mt-0.5">
           {latestMonth ? `As of ${formatMonth(latestMonth)}` : 'No data yet'}
         </p>
       </div>
 
       {/* Net Worth Hero */}
-      <div className="bg-[#12151f] border border-[#1e2235] rounded-2xl p-7">
+      <div className="bg-[#12151f] border border-[#1e2235] rounded-2xl p-4 md:p-7">
         <p className="text-sm text-gray-400 font-medium mb-2">Total Net Worth</p>
-        <div className="flex items-end gap-4 flex-wrap">
-          <span className="text-5xl font-bold text-white tracking-tight">
+        <div className="flex items-end gap-3 md:gap-4 flex-wrap">
+          <span className="text-3xl md:text-5xl font-bold text-white tracking-tight">
             {formatCurrencyFull(netWorth)}
           </span>
           {changeAmount !== null && changePct !== null && (
@@ -82,9 +82,9 @@ export default function Dashboard({ onGoToAccounts, onGoToAccount }: DashboardPr
       </div>
 
       {/* Chart */}
-      <div className="bg-[#12151f] border border-[#1e2235] rounded-2xl p-6">
-        <h2 className="text-sm font-semibold text-gray-300 mb-6">Portfolio Over Time</h2>
-        <div className="h-72">
+      <div className="bg-[#12151f] border border-[#1e2235] rounded-2xl p-4 md:p-6">
+        <h2 className="text-sm font-semibold text-gray-300 mb-4 md:mb-6">Portfolio Over Time</h2>
+        <div className="h-48 md:h-72">
           <NetWorthChart accounts={accounts} />
         </div>
       </div>

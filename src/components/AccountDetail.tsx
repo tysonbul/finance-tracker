@@ -41,10 +41,10 @@ export default function AccountDetail({ account, onBack }: AccountDetailProps) {
   }
 
   return (
-    <div className="p-8 space-y-8">
+    <div className="p-4 md:p-8 space-y-6 md:space-y-8">
       {/* Header */}
-      <div className="flex items-start justify-between gap-4">
-        <div className="flex items-center gap-4">
+      <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+        <div className="flex items-center gap-3 md:gap-4">
           <button
             onClick={onBack}
             className="p-2 rounded-xl border border-[#1e2235] text-gray-400 hover:text-white hover:bg-[#1a1e2e] transition-all"
@@ -65,7 +65,7 @@ export default function AccountDetail({ account, onBack }: AccountDetailProps) {
           </div>
         </div>
 
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex items-center gap-2 md:shrink-0">
           <button
             onClick={() => setShowUpload(true)}
             className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-app-accent text-[#0a0d14] text-sm font-semibold hover:bg-app-accent-hover transition-all"
@@ -86,7 +86,7 @@ export default function AccountDetail({ account, onBack }: AccountDetailProps) {
       {latest && (
         <div className="bg-[#12151f] border border-[#1e2235] rounded-2xl p-6">
           <p className="text-xs text-gray-500 mb-1">Latest Value</p>
-          <p className="text-4xl font-bold text-white">{formatCurrencyFull(latest.value)}</p>
+          <p className="text-3xl md:text-4xl font-bold text-white">{formatCurrencyFull(latest.value)}</p>
           <p className="text-xs text-gray-600 mt-1">{formatMonth(latest.yearMonth)}</p>
         </div>
       )}
@@ -95,7 +95,7 @@ export default function AccountDetail({ account, onBack }: AccountDetailProps) {
       {sorted.length > 1 && (
         <div className="bg-[#12151f] border border-[#1e2235] rounded-2xl p-6">
           <h2 className="text-sm font-semibold text-gray-300 mb-6">Value Over Time</h2>
-          <div className="h-52">
+          <div className="h-40 md:h-52">
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={chartData} margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#1e2235" vertical={false} />
@@ -198,7 +198,7 @@ export default function AccountDetail({ account, onBack }: AccountDetailProps) {
 
                   <button
                     onClick={() => deleteEntry(account.id, entry.id)}
-                    className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg text-gray-600 hover:text-red-400 hover:bg-red-400/10 transition-all"
+                    className="opacity-100 sm:opacity-0 group-hover:opacity-100 p-1.5 rounded-lg text-gray-600 hover:text-red-400 hover:bg-red-400/10 transition-all"
                   >
                     <Trash2 size={13} />
                   </button>
