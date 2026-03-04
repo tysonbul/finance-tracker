@@ -131,35 +131,37 @@ export default function NetWorthChart({ accounts }: NetWorthChartProps) {
 
   if (data.length === 0) {
     return (
-      <div className="flex items-center justify-center h-full text-gray-500 text-sm">
+      <div className="flex items-center justify-center h-44 text-gray-500 text-sm">
         Upload statements to see your portfolio over time
       </div>
     )
   }
 
   return (
-    <div className="flex flex-col h-full gap-3">
+    <div className="space-y-3">
       {/* Toggle */}
-      <div className="flex gap-1 p-0.5 bg-[#0a0d14] border border-[#1e2235] rounded-lg w-fit self-end">
-        <button
-          onClick={() => setMode('total')}
-          className={`px-3 py-1 rounded-md text-xs font-medium transition-all ${
-            mode === 'total' ? 'bg-[#1a1e2e] text-white' : 'text-gray-500 hover:text-gray-300'
-          }`}
-        >
-          Total
-        </button>
-        <button
-          onClick={() => setMode('delta')}
-          className={`px-3 py-1 rounded-md text-xs font-medium transition-all ${
-            mode === 'delta' ? 'bg-[#1a1e2e] text-white' : 'text-gray-500 hover:text-gray-300'
-          }`}
-        >
-          Monthly Change
-        </button>
+      <div className="flex justify-end">
+        <div className="flex gap-1 p-0.5 bg-[#0a0d14] border border-[#1e2235] rounded-lg">
+          <button
+            onClick={() => setMode('total')}
+            className={`px-3 py-1 rounded-md text-xs font-medium transition-all ${
+              mode === 'total' ? 'bg-[#1a1e2e] text-white' : 'text-gray-500 hover:text-gray-300'
+            }`}
+          >
+            Total
+          </button>
+          <button
+            onClick={() => setMode('delta')}
+            className={`px-3 py-1 rounded-md text-xs font-medium transition-all ${
+              mode === 'delta' ? 'bg-[#1a1e2e] text-white' : 'text-gray-500 hover:text-gray-300'
+            }`}
+          >
+            Monthly Change
+          </button>
+        </div>
       </div>
 
-      <div className="flex-1 min-h-0">
+      <div className="h-80">
         {mode === 'total' ? (
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={data} margin={{ top: 5, right: 10, left: 5, bottom: 5 }}>

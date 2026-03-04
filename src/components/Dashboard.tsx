@@ -115,9 +115,7 @@ export default function Dashboard({ onGoToAccounts, onGoToAccount }: DashboardPr
       {/* Chart */}
       <div className="bg-[#12151f] border border-[#1e2235] rounded-2xl p-4 md:p-6">
         <h2 className="text-sm font-semibold text-gray-300 mb-4 md:mb-6">Portfolio Over Time</h2>
-        <div className="h-48 md:h-72">
-          <NetWorthChart accounts={accounts} />
-        </div>
+        <NetWorthChart accounts={accounts} />
       </div>
 
       {/* Account Cards */}
