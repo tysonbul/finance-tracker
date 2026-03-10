@@ -1,4 +1,5 @@
 import { AppData } from '../types'
+import { generateDemoData } from './demoData'
 
 const STORAGE_KEY = 'finance-tracker-v1'
 
@@ -11,7 +12,7 @@ const DEFAULT_CASH_FLOW_CONFIG: AppData['cashFlowConfig'] = {
 export const loadData = (): AppData => {
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
-    if (!raw) return { accounts: [], creditCardAccounts: [], cashFlowConfig: DEFAULT_CASH_FLOW_CONFIG, version: 1 }
+    if (!raw) return generateDemoData()
     const parsed = JSON.parse(raw) as AppData
     // Migrate legacy data
     if (!parsed.creditCardAccounts) parsed.creditCardAccounts = []
