@@ -519,16 +519,18 @@ export default function CashFlowDashboard() {
                       step="0.01"
                     />
                   </div>
-                  <div className="grid grid-cols-3 gap-3">
+                  <div>
                     <select
                       value={incomeFrequency}
                       onChange={(e) => setIncomeFrequency(e.target.value as ExpenseFrequency)}
-                      className={selectClass}
+                      className={`${selectClass} w-full`}
                     >
                       <option value="monthly">Monthly</option>
                       <option value="bi-weekly">Bi-weekly</option>
                       <option value="yearly">Yearly</option>
                     </select>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
                     <div>
                       <label className="text-[10px] text-gray-500 mb-1 block">Start</label>
                       <input
@@ -653,7 +655,7 @@ export default function CashFlowDashboard() {
                     <select
                       value={expenseFrequency}
                       onChange={(e) => setExpenseFrequency(e.target.value as ExpenseFrequency)}
-                      className={selectClass}
+                      className={`${selectClass} w-full`}
                     >
                       <option value="monthly">Monthly</option>
                       <option value="bi-weekly">Bi-weekly</option>
