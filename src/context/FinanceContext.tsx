@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useCallback, useEffect } from 'react'
+import React, { createContext, useContext, useState, useCallback, useEffect, useRef } from 'react'
 import { Account, AccountEntry, AccountType, AppData, CreditCardAccount, CreditCardEntry, IncomeRecord, FixedExpense, CCAdjustment } from '../types'
 import { loadData, saveData } from '../utils/storage'
 
@@ -72,16 +72,33 @@ interface FinanceContextValue {
   deleteFixedExpense: (id: string) => void
   addCCAdjustment: (adj: Omit<CCAdjustment, 'id'>) => void
   deleteCCAdjustment: (id: string) => void
+  hasUnsavedChanges: boolean
+  markExported: () => void
 }
 
 const FinanceContext = createContext<FinanceContextValue | null>(null)
 
+const DIRTY_KEY = 'finance-tracker-dirty'
+
 export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [data, setData] = useState<AppData>(loadData)
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(() => localStorage.getItem(DIRTY_KEY) === '1')
+  const isInitialMount = useRef(true)
 
   useEffect(() => {
     saveData(data)
+    if (isInitialMount.current) {
+      isInitialMount.current = false
+      return
+    }
+    setHasUnsavedChanges(true)
+    localStorage.setItem(DIRTY_KEY, '1')
   }, [data])
+
+  const markExported = useCallback(() => {
+    setHasUnsavedChanges(false)
+    localStorage.removeItem(DIRTY_KEY)
+  }, [])
 
   const addAccount = useCallback((accountData: NewAccountData) => {
     setData((prev) => {
@@ -348,6 +365,8 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
         deleteFixedExpense,
         addCCAdjustment,
         deleteCCAdjustment,
+        hasUnsavedChanges,
+        markExported,
       }}
     >
       {children}

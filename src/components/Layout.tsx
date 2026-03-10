@@ -1,4 +1,5 @@
 import { LayoutDashboard, Wallet, Database, Upload, type LucideIcon } from 'lucide-react'
+import { useFinance } from '../context/FinanceContext'
 
 type View = 'dashboard' | 'accounts' | 'data'
 
@@ -16,6 +17,7 @@ const NAV_ITEMS: { view: View; label: string; Icon: LucideIcon }[] = [
 ]
 
 export default function Layout({ view, onNavigate, onUpload, children }: LayoutProps) {
+  const { hasUnsavedChanges } = useFinance()
   return (
     <div className="flex min-h-screen md:h-screen">
       {/* Sidebar — desktop only */}
@@ -63,7 +65,12 @@ export default function Layout({ view, onNavigate, onUpload, children }: LayoutP
                     : 'text-gray-400 hover:text-white hover:bg-[#1a1e2e]'
                 }`}
               >
-                <Icon size={16} className={active ? 'text-app-accent' : ''} />
+                <span className="relative">
+                  <Icon size={16} className={active ? 'text-app-accent' : ''} />
+                  {v === 'data' && hasUnsavedChanges && (
+                    <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-app-accent" />
+                  )}
+                </span>
                 {label}
               </button>
             )
@@ -113,7 +120,12 @@ export default function Layout({ view, onNavigate, onUpload, children }: LayoutP
                 active ? 'text-app-accent' : 'text-gray-500'
               }`}
             >
-              <Icon size={20} />
+              <span className="relative">
+                <Icon size={20} />
+                {v === 'data' && hasUnsavedChanges && (
+                  <span className="absolute -top-0.5 -right-1 w-2 h-2 rounded-full bg-app-accent" />
+                )}
+              </span>
               {label}
             </button>
           )

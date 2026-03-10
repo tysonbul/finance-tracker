@@ -5,7 +5,7 @@ import { exportData, parseImportFile } from '../utils/exportImport'
 import { AppData } from '../types'
 
 export default function DataManagement() {
-  const { data, replaceData } = useFinance()
+  const { data, replaceData, markExported, hasUnsavedChanges } = useFinance()
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [importStatus, setImportStatus] = useState<'idle' | 'success' | 'error'>('idle')
   const [importMsg, setImportMsg] = useState('')
@@ -19,6 +19,7 @@ export default function DataManagement() {
 
   const handleExport = () => {
     exportData(data)
+    markExported()
   }
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -57,6 +58,20 @@ export default function DataManagement() {
         </p>
       </div>
 
+      {/* Local storage info */}
+      <div className="bg-[#12151f] border border-[#1e2235] rounded-2xl p-6">
+        <h2 className="text-sm font-semibold text-white mb-1">Storage</h2>
+        <p className="text-xs text-gray-500 leading-relaxed">
+          All data is stored locally in your browser and is never sent to any server.
+          This means your data can be lost if you clear your browser data or switch devices.
+        </p>
+        <p className="text-xs text-gray-500 leading-relaxed mt-2">
+          To keep your data safe, regularly export it and save the file to cloud storage
+          (e.g. iCloud, Google Drive, Dropbox). You can re-import the file at any time to
+          restore your data.
+        </p>
+      </div>
+
       {/* Export */}
       <div className="bg-[#12151f] border border-[#1e2235] rounded-2xl p-6">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -76,6 +91,12 @@ export default function DataManagement() {
             Export
           </button>
         </div>
+        {hasUnsavedChanges && (
+          <div className="flex items-center gap-2 mt-4 p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl text-xs text-amber-400/90">
+            <AlertTriangle size={13} className="shrink-0" />
+            Data has changed since your last export. Export to keep your backup up to date.
+          </div>
+        )}
       </div>
 
       {/* Import */}
@@ -188,14 +209,6 @@ export default function DataManagement() {
         </div>
       </div>
 
-      {/* Local storage info */}
-      <div className="bg-[#12151f] border border-[#1e2235] rounded-2xl p-6">
-        <h2 className="text-sm font-semibold text-white mb-1">Storage</h2>
-        <p className="text-xs text-gray-500 leading-relaxed">
-          All data is stored locally in your browser's storage. Nothing is sent to any server.
-          Clear your browser data or export first to avoid losing your history.
-        </p>
-      </div>
     </div>
   )
 }
