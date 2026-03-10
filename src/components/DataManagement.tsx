@@ -74,46 +74,6 @@ export default function DataManagement() {
         </p>
       </div>
 
-      {/* Demo Data */}
-      <div className="bg-[#12151f] border border-[#1e2235] rounded-2xl p-6">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-          <div>
-            <h2 className="text-sm font-semibold text-white mb-1">Demo Data</h2>
-            <p className="text-xs text-gray-500 leading-relaxed">
-              Load sample data to explore the app. This will{' '}
-              <strong className="text-yellow-400">replace</strong> all current data.
-            </p>
-          </div>
-          {!confirmDemo ? (
-            <button
-              onClick={() => setConfirmDemo(true)}
-              className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-[#1e2235] text-sm text-gray-300 hover:text-white hover:bg-[#1a1e2e] transition-all self-start sm:self-auto sm:shrink-0"
-            >
-              <Play size={14} />
-              Load Demo Data
-            </button>
-          ) : (
-            <div className="flex gap-2 self-start sm:self-auto sm:shrink-0">
-              <button
-                onClick={() => setConfirmDemo(false)}
-                className="px-3 py-2 rounded-lg border border-[#1e2235] text-xs text-gray-400 hover:text-white transition-all"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={() => {
-                  replaceData(generateDemoData())
-                  setConfirmDemo(false)
-                }}
-                className="px-3 py-2 rounded-lg bg-yellow-500 text-[#0a0d14] text-xs font-semibold hover:bg-yellow-400 transition-all"
-              >
-                Replace &amp; Load Demo
-              </button>
-            </div>
-          )}
-        </div>
-      </div>
-
       {/* Export */}
       <div className="bg-[#12151f] border border-[#1e2235] rounded-2xl p-6">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -245,6 +205,46 @@ export default function DataManagement() {
                 className="px-3 py-2 rounded-lg bg-red-500 text-white text-xs font-semibold hover:bg-red-400 transition-all"
               >
                 Delete Everything
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Demo Data */}
+      <div className="bg-[#12151f] border border-[#1e2235] rounded-2xl p-6">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <h2 className="text-sm font-semibold text-white mb-1">Demo Data</h2>
+            <p className="text-xs text-gray-500 leading-relaxed">
+              Load sample data to explore the app. This will{' '}
+              <strong className="text-yellow-400">replace</strong> all current data.
+            </p>
+          </div>
+          {!confirmDemo ? (
+            <button
+              onClick={() => setConfirmDemo(true)}
+              className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-[#1e2235] text-sm text-gray-300 hover:text-white hover:bg-[#1a1e2e] transition-all self-start sm:self-auto sm:shrink-0"
+            >
+              <Play size={14} />
+              Load Demo Data
+            </button>
+          ) : (
+            <div className="flex gap-2 self-start sm:self-auto sm:shrink-0">
+              <button
+                onClick={() => setConfirmDemo(false)}
+                className="px-3 py-2 rounded-lg border border-[#1e2235] text-xs text-gray-400 hover:text-white transition-all"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  replaceData(generateDemoData())
+                  setConfirmDemo(false)
+                }}
+                className="px-3 py-2 rounded-lg bg-yellow-500 text-[#0a0d14] text-xs font-semibold hover:bg-yellow-400 transition-all"
+              >
+                Replace &amp; Load Demo
               </button>
             </div>
           )}
