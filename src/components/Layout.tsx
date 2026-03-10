@@ -19,7 +19,7 @@ const NAV_ITEMS: { view: View; label: string; Icon: LucideIcon }[] = [
 export default function Layout({ view, onNavigate, onUpload, children }: LayoutProps) {
   const { hasUnsavedChanges } = useFinance()
   return (
-    <div className="flex min-h-screen md:h-screen">
+    <div className="flex min-h-screen md:h-screen w-full overflow-x-hidden">
       {/* Sidebar — desktop only */}
       <aside className="hidden md:flex w-56 shrink-0 flex-col border-r border-[#1e2235] bg-[#0d1018]">
         {/* Brand */}
@@ -79,7 +79,7 @@ export default function Layout({ view, onNavigate, onUpload, children }: LayoutP
       </aside>
 
       {/* Main */}
-      <main className="flex-1 md:overflow-auto bg-[#0a0d14] pb-20 md:pb-0">{children}</main>
+      <main className="flex-1 min-w-0 overflow-x-hidden md:overflow-auto bg-[#0a0d14] pb-20 md:pb-0">{children}</main>
 
       {/* Bottom nav — mobile only */}
       <nav className="fixed bottom-0 left-0 right-0 z-40 flex md:hidden border-t border-[#1e2235] bg-[#0d1018]">
