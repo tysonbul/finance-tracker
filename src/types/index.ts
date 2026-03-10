@@ -46,9 +46,44 @@ export interface CreditCardAccount {
   entries: CreditCardEntry[]
 }
 
+export type ExpenseFrequency = 'monthly' | 'bi-weekly' | 'yearly'
+
+export interface IncomeRecord {
+  id: string
+  name: string              // e.g. "Salary - Acme Corp"
+  amount: number            // raw amount at the given frequency
+  frequency: ExpenseFrequency
+  startDate: string         // 'YYYY-MM'
+  endDate: string | null    // 'YYYY-MM' or null = ongoing
+}
+
+export interface FixedExpense {
+  id: string
+  name: string
+  amount: number            // raw amount at the given frequency
+  frequency: ExpenseFrequency
+  isOnCreditCard: boolean
+  startDate: string         // 'YYYY-MM'
+  endDate: string | null    // 'YYYY-MM' or null = ongoing
+}
+
+export interface CCAdjustment {
+  id: string
+  month: string             // 'YYYY-MM'
+  amount: number            // positive = amount to subtract from CC total
+  name: string              // e.g. "Toronto work trip"
+}
+
+export interface CashFlowConfig {
+  incomeRecords: IncomeRecord[]
+  fixedExpenses: FixedExpense[]
+  ccAdjustments: CCAdjustment[]
+}
+
 export interface AppData {
   accounts: Account[]
   creditCardAccounts: CreditCardAccount[]
+  cashFlowConfig: CashFlowConfig
   version: number
 }
 

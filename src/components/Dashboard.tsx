@@ -3,6 +3,7 @@ import { TrendingUp, TrendingDown, Plus } from 'lucide-react'
 import { useFinance } from '../context/FinanceContext'
 import NetWorthChart from './NetWorthChart'
 import SpendDashboard from './SpendDashboard'
+import CashFlowDashboard from './CashFlowDashboard'
 import { formatCurrencyFull, formatCurrency, formatMonth } from '../utils/formatters'
 
 interface DashboardProps {
@@ -10,7 +11,7 @@ interface DashboardProps {
   onGoToAccount: (id: string) => void
 }
 
-type DashTab = 'save' | 'spend'
+type DashTab = 'save' | 'spend' | 'cash-flow'
 
 export default function Dashboard({ onGoToAccounts, onGoToAccount }: DashboardProps) {
   const { data } = useFinance()
@@ -76,11 +77,24 @@ export default function Dashboard({ onGoToAccounts, onGoToAccount }: DashboardPr
           >
             Spend
           </button>
+          <button
+            onClick={() => setTab('cash-flow')}
+            className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-all ${
+              tab === 'cash-flow'
+                ? 'bg-app-accent text-[#0a0d14]'
+                : 'text-gray-400 hover:text-white'
+            }`}
+          >
+            Cash Flow
+          </button>
         </div>
       </div>
 
       {/* Spend tab */}
       {tab === 'spend' && <SpendDashboard />}
+
+      {/* Cash Flow tab */}
+      {tab === 'cash-flow' && <CashFlowDashboard />}
 
       {/* Save tab content */}
       {tab === 'save' && <>

@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useCallback, useEffect } from 'react'
-import { Account, AccountEntry, AccountType, AppData, CreditCardAccount, CreditCardEntry } from '../types'
+import { Account, AccountEntry, AccountType, AppData, CreditCardAccount, CreditCardEntry, IncomeRecord, FixedExpense, CCAdjustment } from '../types'
 import { loadData, saveData } from '../utils/storage'
 
 const ACCOUNT_COLORS = [
@@ -63,6 +63,15 @@ interface FinanceContextValue {
     entry: Omit<CreditCardEntry, 'id' | 'uploadedAt'>,
   ) => void
   deleteCreditCardEntry: (accountId: string, entryId: string) => void
+  // Cash flow methods
+  addIncomeRecord: (record: Omit<IncomeRecord, 'id'>) => void
+  updateIncomeRecord: (id: string, record: Omit<IncomeRecord, 'id'>) => void
+  deleteIncomeRecord: (id: string) => void
+  addFixedExpense: (expense: Omit<FixedExpense, 'id'>) => void
+  updateFixedExpense: (id: string, expense: Omit<FixedExpense, 'id'>) => void
+  deleteFixedExpense: (id: string) => void
+  addCCAdjustment: (adj: Omit<CCAdjustment, 'id'>) => void
+  deleteCCAdjustment: (id: string) => void
 }
 
 const FinanceContext = createContext<FinanceContextValue | null>(null)
@@ -230,6 +239,92 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }))
   }, [])
 
+  // ─── Cash flow methods ────────────────────────────────────────────────────
+
+  const addIncomeRecord = useCallback((record: Omit<IncomeRecord, 'id'>) => {
+    setData((prev) => ({
+      ...prev,
+      cashFlowConfig: {
+        ...prev.cashFlowConfig,
+        incomeRecords: [...prev.cashFlowConfig.incomeRecords, { ...record, id: crypto.randomUUID() }],
+      },
+    }))
+  }, [])
+
+  const updateIncomeRecord = useCallback((id: string, record: Omit<IncomeRecord, 'id'>) => {
+    setData((prev) => ({
+      ...prev,
+      cashFlowConfig: {
+        ...prev.cashFlowConfig,
+        incomeRecords: prev.cashFlowConfig.incomeRecords.map((r) =>
+          r.id === id ? { ...record, id } : r,
+        ),
+      },
+    }))
+  }, [])
+
+  const deleteIncomeRecord = useCallback((id: string) => {
+    setData((prev) => ({
+      ...prev,
+      cashFlowConfig: {
+        ...prev.cashFlowConfig,
+        incomeRecords: prev.cashFlowConfig.incomeRecords.filter((r) => r.id !== id),
+      },
+    }))
+  }, [])
+
+  const addFixedExpense = useCallback((expense: Omit<FixedExpense, 'id'>) => {
+    setData((prev) => ({
+      ...prev,
+      cashFlowConfig: {
+        ...prev.cashFlowConfig,
+        fixedExpenses: [...prev.cashFlowConfig.fixedExpenses, { ...expense, id: crypto.randomUUID() }],
+      },
+    }))
+  }, [])
+
+  const updateFixedExpense = useCallback((id: string, expense: Omit<FixedExpense, 'id'>) => {
+    setData((prev) => ({
+      ...prev,
+      cashFlowConfig: {
+        ...prev.cashFlowConfig,
+        fixedExpenses: prev.cashFlowConfig.fixedExpenses.map((e) =>
+          e.id === id ? { ...expense, id } : e,
+        ),
+      },
+    }))
+  }, [])
+
+  const deleteFixedExpense = useCallback((id: string) => {
+    setData((prev) => ({
+      ...prev,
+      cashFlowConfig: {
+        ...prev.cashFlowConfig,
+        fixedExpenses: prev.cashFlowConfig.fixedExpenses.filter((e) => e.id !== id),
+      },
+    }))
+  }, [])
+
+  const addCCAdjustment = useCallback((adj: Omit<CCAdjustment, 'id'>) => {
+    setData((prev) => ({
+      ...prev,
+      cashFlowConfig: {
+        ...prev.cashFlowConfig,
+        ccAdjustments: [...prev.cashFlowConfig.ccAdjustments, { ...adj, id: crypto.randomUUID() }],
+      },
+    }))
+  }, [])
+
+  const deleteCCAdjustment = useCallback((id: string) => {
+    setData((prev) => ({
+      ...prev,
+      cashFlowConfig: {
+        ...prev.cashFlowConfig,
+        ccAdjustments: prev.cashFlowConfig.ccAdjustments.filter((a) => a.id !== id),
+      },
+    }))
+  }, [])
+
   return (
     <FinanceContext.Provider
       value={{
@@ -245,6 +340,14 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
         addCreditCardEntry,
         addCreditCardAccountWithEntry,
         deleteCreditCardEntry,
+        addIncomeRecord,
+        updateIncomeRecord,
+        deleteIncomeRecord,
+        addFixedExpense,
+        updateFixedExpense,
+        deleteFixedExpense,
+        addCCAdjustment,
+        deleteCCAdjustment,
       }}
     >
       {children}

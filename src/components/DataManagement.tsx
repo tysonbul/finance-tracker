@@ -13,7 +13,7 @@ export default function DataManagement() {
   const [confirmClear, setConfirmClear] = useState(false)
 
   const handleClearData = () => {
-    replaceData({ accounts: [], creditCardAccounts: [], version: 1 })
+    replaceData({ accounts: [], creditCardAccounts: [], cashFlowConfig: { incomeRecords: [], fixedExpenses: [], ccAdjustments: [] }, version: 1 })
     setConfirmClear(false)
   }
 
