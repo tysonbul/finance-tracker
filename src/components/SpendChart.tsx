@@ -10,9 +10,11 @@ import {
 } from 'recharts'
 import { CreditCardAccount } from '../types'
 import { formatCurrency, formatCurrencyFull, formatMonth } from '../utils/formatters'
+import { DateRange, filterByDateRange } from '../utils/dateRange'
 
 interface SpendChartProps {
   accounts: CreditCardAccount[]
+  dateRange: DateRange
 }
 
 interface ChartRow {
@@ -83,8 +85,8 @@ const formatYAxis = (value: number) => {
   return `$${value}`
 }
 
-export default function SpendChart({ accounts }: SpendChartProps) {
-  const data = buildChartData(accounts)
+export default function SpendChart({ accounts, dateRange }: SpendChartProps) {
+  const data = filterByDateRange(buildChartData(accounts), dateRange)
 
   if (data.length === 0) {
     return (

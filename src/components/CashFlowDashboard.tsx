@@ -26,6 +26,8 @@ import { useFinance } from '../context/FinanceContext'
 import { ExpenseFrequency } from '../types'
 import { computeMonthlyCashFlow, normalizeToMonthly } from '../utils/cashFlow'
 import { formatCurrencyFull, formatMonth, currentYearMonth } from '../utils/formatters'
+import { DateRange, filterByDateRange } from '../utils/dateRange'
+import DateRangeFilter from './DateRangeFilter'
 
 const FREQ_LABELS: Record<ExpenseFrequency, string> = {
   'monthly': 'Monthly',
@@ -158,6 +160,12 @@ export default function CashFlowDashboard() {
   const [showSetup, setShowSetup] = useState(!hasConfig)
   const [showBreakdown, setShowBreakdown] = useState(false)
   const [chartView, setChartView] = useState<ChartView>('net')
+  const [dateRange, setDateRange] = useState<DateRange>('6mo')
+
+  const filteredMonthlyData = useMemo(
+    () => filterByDateRange(monthlyData, dateRange),
+    [monthlyData, dateRange],
+  )
 
   // Income form state
   const [addingIncome, setAddingIncome] = useState(false)
@@ -277,8 +285,8 @@ export default function CashFlowDashboard() {
 
   // Hero metric
   const avgNetCashFlow =
-    monthlyData.length > 0
-      ? monthlyData.reduce((s, m) => s + m.netCashFlow, 0) / monthlyData.length
+    filteredMonthlyData.length > 0
+      ? filteredMonthlyData.reduce((s, m) => s + m.netCashFlow, 0) / filteredMonthlyData.length
       : null
 
   const inputClass =
@@ -306,14 +314,14 @@ export default function CashFlowDashboard() {
           </span>
         </div>
         <p className="text-xs text-gray-500 mt-2">
-          {monthlyData.length > 0
-            ? `Based on ${monthlyData.length} month${monthlyData.length === 1 ? '' : 's'} of data`
+          {filteredMonthlyData.length > 0
+            ? `Based on ${filteredMonthlyData.length} month${filteredMonthlyData.length === 1 ? '' : 's'} of data`
             : 'Upload credit card statements to see cash flow'}
         </p>
       </div>
 
       {/* Chart Carousel */}
-      {monthlyData.length > 0 && (
+      {filteredMonthlyData.length > 0 && (
         <div className="bg-[#12151f] border border-[#1e2235] rounded-2xl p-4 md:p-6">
           {/* Carousel header */}
           <div className="flex items-center justify-between mb-4 md:mb-6">
@@ -344,6 +352,11 @@ export default function CashFlowDashboard() {
             </button>
           </div>
 
+          {/* Date range filter */}
+          <div className="flex justify-center mb-4">
+            <DateRangeFilter value={dateRange} onChange={setDateRange} />
+          </div>
+
           {/* Dot indicators */}
           <div className="flex justify-center gap-1.5 mb-4">
             {CHART_VIEWS.map((v) => (
@@ -360,7 +373,7 @@ export default function CashFlowDashboard() {
           <div className="h-48 md:h-72">
             {chartView === 'net' ? (
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={monthlyData} margin={{ top: 5, right: 10, left: 5, bottom: 5 }}>
+                <BarChart data={filteredMonthlyData} margin={{ top: 5, right: 10, left: 5, bottom: 5 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#1e2235" vertical={false} />
                   <XAxis
                     dataKey="month"
@@ -380,7 +393,7 @@ export default function CashFlowDashboard() {
                   />
                   <Tooltip content={<CashFlowTooltip />} cursor={{ fill: 'rgba(255,255,255,0.04)' }} />
                   <Bar dataKey="netCashFlow" radius={[4, 4, 0, 0]}>
-                    {monthlyData.map((entry, index) => (
+                    {filteredMonthlyData.map((entry, index) => (
                       <Cell
                         key={index}
                         fill={entry.netCashFlow >= 0 ? '#34d399' : '#f87171'}
@@ -392,7 +405,7 @@ export default function CashFlowDashboard() {
             ) : (
               <ResponsiveContainer width="100%" height="100%">
                 <ComposedChart
-                  data={monthlyData.map((m) => ({
+                  data={filteredMonthlyData.map((m) => ({
                     month: m.month,
                     'Fixed (non-CC)': m.fixedNonCC,
                     'Fixed (on CC)': m.fixedCC,
@@ -460,7 +473,7 @@ export default function CashFlowDashboard() {
       )}
 
       {/* Monthly Breakdown */}
-      {monthlyData.length > 0 && (
+      {filteredMonthlyData.length > 0 && (
         <div className="bg-[#12151f] border border-[#1e2235] rounded-2xl">
           <button
             onClick={() => setShowBreakdown(!showBreakdown)}
@@ -468,7 +481,7 @@ export default function CashFlowDashboard() {
           >
             <div>
               <h2 className="text-sm font-semibold text-white">Monthly Breakdown</h2>
-              <p className="text-xs text-gray-500 mt-0.5">{monthlyData.length} month{monthlyData.length !== 1 ? 's' : ''} of data</p>
+              <p className="text-xs text-gray-500 mt-0.5">{filteredMonthlyData.length} month{filteredMonthlyData.length !== 1 ? 's' : ''} of data</p>
             </div>
             {showBreakdown ? (
               <ChevronUp size={16} className="text-gray-400" />
@@ -478,7 +491,7 @@ export default function CashFlowDashboard() {
           </button>
           {showBreakdown && (
             <div className="px-4 md:px-6 pb-4 md:pb-6 space-y-3 border-t border-[#1e2235] pt-4">
-              {[...monthlyData].reverse().map((m) => {
+              {[...filteredMonthlyData].reverse().map((m) => {
                 const monthAdj = ccAdjustments.filter((a) => a.month === m.month)
                 return (
                   <div

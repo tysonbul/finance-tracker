@@ -3,8 +3,10 @@ import { Plus, Upload, Trash2 } from 'lucide-react'
 import { useFinance } from '../context/FinanceContext'
 import SpendChart from './SpendChart'
 import CreditCardUploadModal from './CreditCardUploadModal'
+import DateRangeFilter from './DateRangeFilter'
 import { formatCurrencyFull, formatDateLong } from '../utils/formatters'
 import { CreditCardAccount } from '../types'
+import { DateRange, filterByDateRange } from '../utils/dateRange'
 
 export default function SpendDashboard() {
   const { data, deleteCreditCardAccount } = useFinance()
@@ -13,6 +15,7 @@ export default function SpendDashboard() {
   const [showUpload, setShowUpload] = useState(false)
   const [uploadForAccount, setUploadForAccount] = useState<CreditCardAccount | undefined>()
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null)
+  const [dateRange, setDateRange] = useState<DateRange>('6mo')
 
   const openGlobalUpload = () => {
     setUploadForAccount(undefined)
@@ -31,13 +34,17 @@ export default function SpendDashboard() {
     ),
   ].sort()
 
-  const monthlyTotals = allMonths.map((month) =>
-    creditCardAccounts.reduce((sum, a) => {
+  const allMonthlyRows = allMonths.map((month) => ({
+    month,
+    total: creditCardAccounts.reduce((sum, a) => {
       const entries = a.entries.filter((e) => e.statementEndDate.startsWith(month))
       entries.sort((x, y) => y.statementEndDate.localeCompare(x.statementEndDate))
       return sum + (entries[0]?.balance ?? 0)
     }, 0),
-  )
+  }))
+
+  const filteredMonthlyRows = filterByDateRange(allMonthlyRows, dateRange)
+  const monthlyTotals = filteredMonthlyRows.map((r) => r.total)
 
   const avgMonthlySpend =
     monthlyTotals.length > 0
@@ -63,9 +70,12 @@ export default function SpendDashboard() {
 
       {/* Chart */}
       <div className="bg-[#12151f] border border-[#1e2235] rounded-2xl p-4 md:p-6">
-        <h2 className="text-sm font-semibold text-gray-300 mb-4 md:mb-6">Balance Over Time</h2>
+        <div className="flex items-center justify-between mb-4 md:mb-6">
+          <h2 className="text-sm font-semibold text-gray-300">Balance Over Time</h2>
+          <DateRangeFilter value={dateRange} onChange={setDateRange} />
+        </div>
         <div className="h-48 md:h-72">
-          <SpendChart accounts={creditCardAccounts} />
+          <SpendChart accounts={creditCardAccounts} dateRange={dateRange} />
         </div>
       </div>
 

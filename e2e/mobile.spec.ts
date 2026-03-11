@@ -487,3 +487,70 @@ test.describe('Full Flow with Demo Data', () => {
     await expect(page.getByText('Avg Net Cash Flow')).toBeVisible()
   })
 })
+
+// ─── Date Range Filter ───────────────────────────────────
+
+test.describe('Date Range Filter', () => {
+  test('Save tab shows date range filter defaulting to 6M', async ({ page }) => {
+    await seedDemoData(page)
+    const filterContainer = page.locator('button:has-text("6M")').first()
+    await expect(filterContainer).toBeVisible()
+    // 6M should be active (white text via bg-[#1a1e2e])
+    await expect(filterContainer).toHaveClass(/bg-\[#1a1e2e\]/)
+  })
+
+  test('Save tab filter buttons are clickable and toggle active state', async ({ page }) => {
+    await seedDemoData(page)
+    // Click 3M
+    const btn3M = page.locator('button:has-text("3M")').first()
+    await btn3M.click()
+    await expect(btn3M).toHaveClass(/bg-\[#1a1e2e\]/)
+
+    // Click All
+    const btnAll = page.locator('button:has-text("All")').first()
+    await btnAll.click()
+    await expect(btnAll).toHaveClass(/bg-\[#1a1e2e\]/)
+
+    // Click 1Y
+    const btn1Y = page.locator('button:has-text("1Y")').first()
+    await btn1Y.click()
+    await expect(btn1Y).toHaveClass(/bg-\[#1a1e2e\]/)
+  })
+
+  test('Spend tab shows date range filter defaulting to 6M', async ({ page }) => {
+    await seedDemoData(page)
+    await page.getByRole('button', { name: 'Spend' }).click()
+    await expect(page.getByText('Avg Monthly Spend')).toBeVisible()
+    const filterContainer = page.locator('button:has-text("6M")').first()
+    await expect(filterContainer).toBeVisible()
+    await expect(filterContainer).toHaveClass(/bg-\[#1a1e2e\]/)
+  })
+
+  test('Cash Flow tab shows date range filter defaulting to 6M', async ({ page }) => {
+    await seedDemoData(page)
+    await page.getByRole('button', { name: 'Cash Flow' }).click()
+    await expect(page.getByText('Avg Net Cash Flow')).toBeVisible()
+    const filterContainer = page.locator('button:has-text("6M")').first()
+    await expect(filterContainer).toBeVisible()
+    await expect(filterContainer).toHaveClass(/bg-\[#1a1e2e\]/)
+  })
+
+  test('Spend tab filter changes hero metric text', async ({ page }) => {
+    await seedDemoData(page)
+    await page.getByRole('button', { name: 'Spend' }).click()
+    await expect(page.getByText('Avg Monthly Spend')).toBeVisible()
+
+    // Get initial "Based on X months" text
+    const basedOnText = page.getByText(/Based on \d+ months? of statements/)
+    const initialText = await basedOnText.textContent()
+
+    // Switch to All to show all data
+    await page.locator('button:has-text("All")').first().click()
+    const allText = await basedOnText.textContent()
+
+    // All should show >= months compared to 6M default
+    const initialMonths = parseInt(initialText?.match(/(\d+)/)?.[1] ?? '0')
+    const allMonths = parseInt(allText?.match(/(\d+)/)?.[1] ?? '0')
+    expect(allMonths).toBeGreaterThanOrEqual(initialMonths)
+  })
+})

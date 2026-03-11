@@ -14,6 +14,8 @@ import {
 } from 'recharts'
 import { Account } from '../types'
 import { formatCurrency, formatMonth } from '../utils/formatters'
+import { DateRange, filterByDateRange } from '../utils/dateRange'
+import DateRangeFilter from './DateRangeFilter'
 
 interface NetWorthChartProps {
   accounts: Account[]
@@ -126,7 +128,9 @@ const DeltaTooltip = ({
 
 export default function NetWorthChart({ accounts }: NetWorthChartProps) {
   const [mode, setMode] = useState<'total' | 'delta'>('total')
-  const data = buildChartData(accounts)
+  const [dateRange, setDateRange] = useState<DateRange>('6mo')
+  const allData = buildChartData(accounts)
+  const data = filterByDateRange(allData, dateRange)
   const deltaData = buildDeltaData(data)
 
   if (data.length === 0) {
@@ -246,6 +250,11 @@ export default function NetWorthChart({ accounts }: NetWorthChartProps) {
             </BarChart>
           </ResponsiveContainer>
         )}
+      </div>
+
+      {/* Date range */}
+      <div className="flex justify-center">
+        <DateRangeFilter value={dateRange} onChange={setDateRange} />
       </div>
     </div>
   )
