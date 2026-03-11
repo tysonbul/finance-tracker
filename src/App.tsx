@@ -7,6 +7,7 @@ import AccountDetail from './components/AccountDetail'
 import CreditCardDetail from './components/CreditCardDetail'
 import DataManagement from './components/DataManagement'
 import UploadModal from './components/UploadModal'
+import PWAUpdatePrompt from './components/PWAUpdatePrompt'
 
 type View =
   | { type: 'dashboard' }
@@ -83,6 +84,7 @@ export default function App() {
   return (
     <FinanceProvider>
       <AppContent />
+      <PWAUpdatePrompt />
     </FinanceProvider>
   )
 }

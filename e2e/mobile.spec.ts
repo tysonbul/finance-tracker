@@ -554,3 +554,24 @@ test.describe('Date Range Filter', () => {
     expect(allMonths).toBeGreaterThanOrEqual(initialMonths)
   })
 })
+
+// ─── PWA Metadata ────────────────────────────────────────
+
+test.describe('PWA Metadata', () => {
+  test('has theme-color meta tag', async ({ page }) => {
+    await page.goto('/')
+    const themeColor = page.locator('meta[name="theme-color"]')
+    await expect(themeColor).toHaveAttribute('content', '#0a0d14')
+  })
+
+  test('has favicon and apple-touch-icon links', async ({ page }) => {
+    await page.goto('/')
+    await expect(page.locator('link[rel="icon"][sizes="48x48"]')).toHaveAttribute('href', /favicon\.ico/)
+    await expect(page.locator('link[rel="apple-touch-icon"]')).toHaveAttribute('href', /apple-touch-icon/)
+  })
+
+  test('has SVG icon link', async ({ page }) => {
+    await page.goto('/')
+    await expect(page.locator('link[rel="icon"][type="image/svg+xml"]')).toHaveAttribute('href', /icon\.svg/)
+  })
+})

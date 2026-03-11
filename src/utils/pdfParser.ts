@@ -300,7 +300,8 @@ export type AutoParseResult =
 
 async function extractFullText(file: File): Promise<string> {
   const pdfjsLib = await import('pdfjs-dist')
-  pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`
+  const workerModule = await import('pdfjs-dist/build/pdf.worker.min.js?url')
+  pdfjsLib.GlobalWorkerOptions.workerSrc = workerModule.default
 
   const arrayBuffer = await file.arrayBuffer()
   const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise
