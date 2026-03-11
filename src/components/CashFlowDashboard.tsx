@@ -1,7 +1,9 @@
 import { useState, useMemo } from 'react'
 import {
   BarChart,
+  ComposedChart,
   Bar,
+  Line,
   XAxis,
   YAxis,
   CartesianGrid,
@@ -12,6 +14,8 @@ import {
 import {
   ChevronDown,
   ChevronUp,
+  ChevronLeft,
+  ChevronRight,
   Plus,
   Pencil,
   Trash2,
@@ -35,6 +39,13 @@ const formatYAxis = (value: number) => {
   return `$${value}`
 }
 
+type ChartView = 'net' | 'fixed-vs-variable'
+
+const CHART_VIEWS: { key: ChartView; label: string }[] = [
+  { key: 'net', label: 'Net Cash Flow' },
+  { key: 'fixed-vs-variable', label: 'Fixed vs Variable' },
+]
+
 const CashFlowTooltip = ({
   active,
   payload,
@@ -56,6 +67,61 @@ const CashFlowTooltip = ({
       >
         {value >= 0 ? '+' : ''}{formatCurrencyFull(value)}
       </span>
+    </div>
+  )
+}
+
+const FixedVarTooltip = ({
+  active,
+  payload,
+  label,
+}: {
+  active?: boolean
+  payload?: { name: string; value: number; color: string }[]
+  label?: string
+}) => {
+  if (!active || !payload?.length) return null
+  const incomeEntry = payload.find((p) => p.name === 'Income')
+  const expenseEntries = payload.filter((p) => p.name !== 'Income')
+  const totalExpenses = expenseEntries.reduce((s, p) => s + p.value, 0)
+  return (
+    <div className="bg-[#12151f] border border-[#1e2235] rounded-xl p-4 shadow-xl min-w-[180px]">
+      <p className="text-xs text-gray-400 mb-2 font-medium uppercase tracking-wide">
+        {label ? formatMonth(label) : ''}
+      </p>
+      <div className="space-y-1">
+        {incomeEntry && (
+          <>
+            <div className="flex items-center justify-between gap-4">
+              <div className="flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full" style={{ backgroundColor: incomeEntry.color }} />
+                <span className="text-xs text-gray-300">Income</span>
+              </div>
+              <span className="text-xs font-semibold font-mono text-emerald-400">
+                {formatCurrencyFull(incomeEntry.value)}
+              </span>
+            </div>
+            <div className="border-t border-[#1e2235] my-1" />
+          </>
+        )}
+        {expenseEntries.map((p) => (
+          <div key={p.name} className="flex items-center justify-between gap-4">
+            <div className="flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full" style={{ backgroundColor: p.color }} />
+              <span className="text-xs text-gray-300">{p.name}</span>
+            </div>
+            <span className="text-xs font-semibold font-mono text-white">
+              {formatCurrencyFull(p.value)}
+            </span>
+          </div>
+        ))}
+        <div className="border-t border-[#1e2235] pt-1 mt-1 flex items-center justify-between">
+          <span className="text-xs text-gray-400">Total Expenses</span>
+          <span className="text-xs font-semibold font-mono text-white">
+            {formatCurrencyFull(totalExpenses)}
+          </span>
+        </div>
+      </div>
     </div>
   )
 }
@@ -91,6 +157,7 @@ export default function CashFlowDashboard() {
   const hasConfig = incomeRecords.length > 0 || fixedExpenses.length > 0
   const [showSetup, setShowSetup] = useState(!hasConfig)
   const [showBreakdown, setShowBreakdown] = useState(false)
+  const [chartView, setChartView] = useState<ChartView>('net')
 
   // Income form state
   const [addingIncome, setAddingIncome] = useState(false)
@@ -245,42 +312,150 @@ export default function CashFlowDashboard() {
         </p>
       </div>
 
-      {/* Chart */}
+      {/* Chart Carousel */}
       {monthlyData.length > 0 && (
         <div className="bg-[#12151f] border border-[#1e2235] rounded-2xl p-4 md:p-6">
-          <h2 className="text-sm font-semibold text-gray-300 mb-4 md:mb-6">Net Cash Flow</h2>
-          <div className="h-48 md:h-72">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={monthlyData} margin={{ top: 5, right: 10, left: 5, bottom: 5 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#1e2235" vertical={false} />
-                <XAxis
-                  dataKey="month"
-                  tickFormatter={formatMonth}
-                  tick={{ fill: '#6b7280', fontSize: 11 }}
-                  axisLine={false}
-                  tickLine={false}
-                  dy={8}
-                />
-                <YAxis
-                  tickFormatter={formatYAxis}
-                  tick={{ fill: '#6b7280', fontSize: 11 }}
-                  axisLine={false}
-                  tickLine={false}
-                  dx={-4}
-                  width={55}
-                />
-                <Tooltip content={<CashFlowTooltip />} cursor={{ fill: 'rgba(255,255,255,0.04)' }} />
-                <Bar dataKey="netCashFlow" radius={[4, 4, 0, 0]}>
-                  {monthlyData.map((entry, index) => (
-                    <Cell
-                      key={index}
-                      fill={entry.netCashFlow >= 0 ? '#34d399' : '#f87171'}
-                    />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
+          {/* Carousel header */}
+          <div className="flex items-center justify-between mb-4 md:mb-6">
+            <button
+              onClick={() => setChartView(chartView === 'net' ? 'fixed-vs-variable' : 'net')}
+              className="p-1 text-gray-500 hover:text-white transition-colors"
+            >
+              <ChevronLeft size={16} />
+            </button>
+            <div className="flex items-center gap-3">
+              {CHART_VIEWS.map((v) => (
+                <button
+                  key={v.key}
+                  onClick={() => setChartView(v.key)}
+                  className={`text-sm font-semibold transition-colors ${
+                    chartView === v.key ? 'text-gray-300' : 'text-gray-600 hover:text-gray-400'
+                  }`}
+                >
+                  {v.label}
+                </button>
+              ))}
+            </div>
+            <button
+              onClick={() => setChartView(chartView === 'net' ? 'fixed-vs-variable' : 'net')}
+              className="p-1 text-gray-500 hover:text-white transition-colors"
+            >
+              <ChevronRight size={16} />
+            </button>
           </div>
+
+          {/* Dot indicators */}
+          <div className="flex justify-center gap-1.5 mb-4">
+            {CHART_VIEWS.map((v) => (
+              <button
+                key={v.key}
+                onClick={() => setChartView(v.key)}
+                className={`w-1.5 h-1.5 rounded-full transition-colors ${
+                  chartView === v.key ? 'bg-app-accent' : 'bg-gray-600'
+                }`}
+              />
+            ))}
+          </div>
+
+          <div className="h-48 md:h-72">
+            {chartView === 'net' ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={monthlyData} margin={{ top: 5, right: 10, left: 5, bottom: 5 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#1e2235" vertical={false} />
+                  <XAxis
+                    dataKey="month"
+                    tickFormatter={formatMonth}
+                    tick={{ fill: '#6b7280', fontSize: 11 }}
+                    axisLine={false}
+                    tickLine={false}
+                    dy={8}
+                  />
+                  <YAxis
+                    tickFormatter={formatYAxis}
+                    tick={{ fill: '#6b7280', fontSize: 11 }}
+                    axisLine={false}
+                    tickLine={false}
+                    dx={-4}
+                    width={55}
+                  />
+                  <Tooltip content={<CashFlowTooltip />} cursor={{ fill: 'rgba(255,255,255,0.04)' }} />
+                  <Bar dataKey="netCashFlow" radius={[4, 4, 0, 0]}>
+                    {monthlyData.map((entry, index) => (
+                      <Cell
+                        key={index}
+                        fill={entry.netCashFlow >= 0 ? '#34d399' : '#f87171'}
+                      />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            ) : (
+              <ResponsiveContainer width="100%" height="100%">
+                <ComposedChart
+                  data={monthlyData.map((m) => ({
+                    month: m.month,
+                    'Fixed (non-CC)': m.fixedNonCC,
+                    'Fixed (on CC)': m.fixedCC,
+                    Variable: m.variableCCSpend,
+                    Income: m.income,
+                  }))}
+                  margin={{ top: 5, right: 10, left: 5, bottom: 5 }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" stroke="#1e2235" vertical={false} />
+                  <XAxis
+                    dataKey="month"
+                    tickFormatter={formatMonth}
+                    tick={{ fill: '#6b7280', fontSize: 11 }}
+                    axisLine={false}
+                    tickLine={false}
+                    dy={8}
+                  />
+                  <YAxis
+                    tickFormatter={formatYAxis}
+                    tick={{ fill: '#6b7280', fontSize: 11 }}
+                    axisLine={false}
+                    tickLine={false}
+                    dx={-4}
+                    width={55}
+                  />
+                  <Tooltip content={<FixedVarTooltip />} cursor={{ fill: 'rgba(255,255,255,0.04)' }} />
+                  <Bar dataKey="Fixed (non-CC)" stackId="spend" fill="#6366f1" radius={[0, 0, 0, 0]} />
+                  <Bar dataKey="Fixed (on CC)" stackId="spend" fill="#818cf8" radius={[0, 0, 0, 0]} />
+                  <Bar dataKey="Variable" stackId="spend" fill="#f59e0b" radius={[4, 4, 0, 0]} />
+                  <Line
+                    dataKey="Income"
+                    type="monotone"
+                    stroke="#34d399"
+                    strokeWidth={2}
+                    dot={{ r: 3, fill: '#34d399', strokeWidth: 0 }}
+                    activeDot={{ r: 5, fill: '#34d399', strokeWidth: 0 }}
+                  />
+                </ComposedChart>
+              </ResponsiveContainer>
+            )}
+          </div>
+
+          {/* Legend for Fixed vs Variable */}
+          {chartView === 'fixed-vs-variable' && (
+            <div className="flex items-center justify-center gap-4 mt-4">
+              <div className="flex items-center gap-1.5">
+                <span className="w-2.5 h-2.5 rounded-sm bg-[#6366f1]" />
+                <span className="text-xs text-gray-400">Fixed (non-CC)</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span className="w-2.5 h-2.5 rounded-sm bg-[#818cf8]" />
+                <span className="text-xs text-gray-400">Fixed (on CC)</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span className="w-2.5 h-2.5 rounded-sm bg-[#f59e0b]" />
+                <span className="text-xs text-gray-400">Variable</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span className="w-2.5 h-0.5 bg-[#34d399] rounded-full" />
+                <span className="text-xs text-gray-400">Income</span>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
