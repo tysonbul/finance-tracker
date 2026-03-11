@@ -354,10 +354,17 @@ export default function UploadModal({ account: preselectedAccount, onClose }: Up
   const activeValue = isCreditCard ? ccParsed?.balance : parsed?.value
   const activeContext = isCreditCard ? ccParsed?.balanceContext : parsed?.valueContext
 
+  const handleBackdropClick = () => {
+    // Don't close on backdrop click during bulk review — too easy to accidentally
+    // dismiss on mobile when scrolling or after a save re-renders the content.
+    if (isBulkMode && step === 'review') return
+    onClose()
+  }
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative bg-[#12151f] border border-[#1e2235] rounded-2xl shadow-2xl w-full max-w-lg max-h-[85svh] flex flex-col">
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={handleBackdropClick} />
+      <div className="relative bg-[#12151f] border border-[#1e2235] rounded-2xl shadow-2xl w-full max-w-lg max-h-[85svh] flex flex-col" onClick={(e) => e.stopPropagation()}>
 
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-5 border-b border-[#1e2235] shrink-0">

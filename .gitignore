@@ -1,5 +1,7 @@
 # Custom
 /samples
+/test-results
+/playwright-report
 
 # Logs
 logs
