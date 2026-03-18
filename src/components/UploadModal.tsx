@@ -7,6 +7,7 @@ import { Account, AccountType, ParsedStatement, ParsedCreditCardStatement, Credi
 import { useFinance } from '../context/FinanceContext'
 import { parseAuto, AutoParseResult } from '../utils/pdfParser'
 import { formatCurrencyFull, currentYearMonth, currentISODate } from '../utils/formatters'
+import { getConversionRates, ConversionRates } from '../utils/exchangeRate'
 
 const ACCOUNT_TYPES: AccountType[] = [
   'TFSA', 'FHSA', 'RRSP', 'RRIF', 'Non-Registered', 'Pension', 'Cash', 'Other',
@@ -106,6 +107,9 @@ export default function UploadModal({ account: preselectedAccount, onClose }: Up
   const [newCCAccountName, setNewCCAccountName] = useState('')
   const [newCCAccountInstitution, setNewCCAccountInstitution] = useState('')
 
+  // Currency→CAD conversion rates (fetched when non-CAD holdings detected)
+  const [conversionRates, setConversionRates] = useState<ConversionRates | undefined>(undefined)
+
   // Deferred queue advance: set to true in handleConfirm so the effect runs
   // after React commits the new account to state — preventing the stale-closure
   // bug where the next queue item's loadResultIntoState sees an empty account list.
@@ -113,6 +117,7 @@ export default function UploadModal({ account: preselectedAccount, onClose }: Up
 
   const loadResultIntoState = useCallback((result: AutoParseResult, file: File) => {
     setFilename(file.name)
+    setConversionRates(undefined)
     if (result.kind === 'credit') {
       const r = result.result
       setIsCreditCard(true)
@@ -133,7 +138,18 @@ export default function UploadModal({ account: preselectedAccount, onClose }: Up
       setIsCreditCard(false)
       setParsed(r)
       setManualValue(r.value !== null ? String(r.value) : '')
-      setYearMonth(r.yearMonth ?? currentYearMonth())
+      const ym = r.yearMonth ?? currentYearMonth()
+      setYearMonth(ym)
+
+      // Fetch conversion rates if any holdings are in a non-CAD currency
+      const hasNonCad = r.holdings?.some((h) => h.currency !== 'CAD')
+      if (hasNonCad && ym) {
+        const latestExisting = data.accounts
+          .flatMap((a) => a.entries)
+          .filter((e) => e.conversionRates)
+          .sort((a, b) => b.yearMonth.localeCompare(a.yearMonth))[0]?.conversionRates
+        getConversionRates(ym, latestExisting).then((rates) => setConversionRates(rates))
+      }
 
       if (preselectedAccount) {
         setSelectedAccountId(preselectedAccount.id)
@@ -285,7 +301,7 @@ export default function UploadModal({ account: preselectedAccount, onClose }: Up
     } else {
       const value = parseFloat(manualValue.replace(/,/g, ''))
       if (isNaN(value) || value <= 0 || !yearMonth) return
-      const entryData = { yearMonth, value, sourceFilename: filename }
+      const entryData = { yearMonth, value, sourceFilename: filename, holdings: parsed?.holdings, conversionRates }
       if (preselectedAccount) {
         addEntry(preselectedAccount.id, entryData)
       } else if (selectedAccountId === 'new') {

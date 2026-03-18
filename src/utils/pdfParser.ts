@@ -1,4 +1,4 @@
-import { AccountType, ParsedStatement, ParsedCreditCardStatement, PdfCandidate } from '../types'
+import { AccountType, Holding, ParsedStatement, ParsedCreditCardStatement, PdfCandidate } from '../types'
 
 // ─── Generic helpers ──────────────────────────────────────────────────────────
 
@@ -97,6 +97,118 @@ function isWealthsimpleCredit(text: string): boolean {
   return /wealthsimple/i.test(text) && /credit card statement/i.test(text)
 }
 
+// ─── Holdings parsers ─────────────────────────────────────────────────────────
+
+/** Parse holdings from "Portfolio Assets" / "Portfolio Equities" table (investment accounts) */
+export function parseInvestmentHoldings(text: string): Holding[] {
+  // Newer format uses "Portfolio Assets", older uses "Portfolio Equities"
+  let portfolioStart = text.indexOf('Portfolio Assets')
+  if (portfolioStart === -1) portfolioStart = text.indexOf('Portfolio Equities')
+  if (portfolioStart === -1) return []
+
+  const endCandidates = ['*Book Cost', 'Stock Lending'].map(m => text.indexOf(m, portfolioStart + 20)).filter(i => i !== -1)
+  const portfolioEnd = endCandidates.length > 0 ? Math.min(...endCandidates) : undefined
+  const section = text.slice(portfolioStart, portfolioEnd)
+
+  // Format variations across statement eras:
+  //   Newest (Oct 2025+): SYMBOL qty(4dp) qty(4dp) qty(4dp) $price CURRENCY $value CURRENCY $cost CURRENCY
+  //   Mid-2025:           SYMBOL qty(4dp) qty(4dp) qty(4dp) $price CURRENCY $value          $cost
+  //   Oldest (early 2025): SYMBOL qty(4dp) qty(4dp)          $price CURRENCY $value          $cost
+  // Strategy: match symbol + first qty(4dp), then flexibly consume remaining columns
+  const regex = /\b([A-Z]{2,5})\s+([\d,]+\.\d{4})\s+[\d,]+\.\d{4}(?:\s+[\d,]+\.\d{4})?\s+\$?([\d,]+\.?\d*)\s*(CAD|USD)\s+\$?([\d,]+\.?\d*)\s*(?:CAD|USD)?\s+\$?([\d,]+\.?\d*)\s*(?:CAD|USD)?/g
+
+  const holdings: Holding[] = []
+  let match: RegExpExecArray | null
+  while ((match = regex.exec(section)) !== null) {
+    const symbol = match[1]
+    if (!/^[A-Z]{2,5}$/.test(symbol)) continue
+    holdings.push({
+      symbol,
+      quantity: parseAmount(match[2]),
+      marketPrice: parseAmount(match[3]),
+      marketValue: parseAmount(match[5]),
+      bookCost: parseAmount(match[6]),
+      currency: match[4],
+    })
+  }
+  return holdings
+}
+
+/** Parse holdings from "Crypto Portfolio" table (Crypto accounts) */
+export function parseCryptoHoldings(text: string): Holding[] {
+  const cryptoStart = text.indexOf('Crypto Portfolio')
+  if (cryptoStart === -1) return []
+
+  const endCandidates = ['*Book Cost', 'Activity'].map(m => text.indexOf(m, cryptoStart + 20)).filter(i => i !== -1)
+  const portfolioEnd = endCandidates.length > 0 ? Math.min(...endCandidates) : undefined
+  const section = text.slice(cryptoStart, portfolioEnd)
+
+  // SYMBOL totalQty(10dp) segregatedQty(10dp) stakedQty(10dp) $price CURRENCY $value $cost
+  const regex = /\b([A-Z]{2,6})\s+([\d,]+\.\d{10})\s+([\d,]+\.\d{10})\s+([\d,]+\.\d{10})\s+\$?([\d,]+\.?\d*)\s*(CAD|USD)\s+\$?([\d,]+\.?\d*)\s+\$?([\d,]+\.?\d*)/g
+
+  const holdings: Holding[] = []
+  let match: RegExpExecArray | null
+  while ((match = regex.exec(section)) !== null) {
+    const symbol = match[1]
+    if (!/^[A-Z]{2,6}$/.test(symbol)) continue
+    holdings.push({
+      symbol,
+      quantity: parseFloat(match[2].replace(/,/g, '')),
+      marketPrice: parseAmount(match[5]),
+      marketValue: parseAmount(match[7]),
+      bookCost: parseAmount(match[8]),
+      // Price currency (match[6]) is the asset's trading denomination (e.g. USD for ETH),
+      // but Wealthsimple converts marketValue and bookCost to CAD for display
+      currency: 'CAD',
+    })
+  }
+  return holdings
+}
+
+/** Parse cash balance from the asset allocation summary at the top of the statement */
+export function parseCashHolding(text: string): Holding | null {
+  // Pattern: "Cash   $7,003.00   2.90   $7,003.00   4.84"
+  // The first dollar amount after "Cash" is the market value
+  const match = text.match(/\bCash\s+\$([\d,]+\.?\d*)\s+[\d.]+\s+\$([\d,]+\.?\d*)/)
+  if (!match) return null
+  const marketValue = parseAmount(match[1])
+  if (marketValue <= 0) return null
+  return {
+    symbol: 'Cash',
+    quantity: 1,
+    marketPrice: marketValue,
+    marketValue,
+    bookCost: parseAmount(match[2]),
+    currency: 'CAD',
+  }
+}
+
+/** Try both investment and crypto holdings parsers, return whichever finds results */
+function parseHoldings(text: string, accountType: AccountType | null, accountTypeLabel: string | null): Holding[] | undefined {
+  try {
+    // Skip Cash/Chequing — no holdings
+    if (accountType === 'Cash') return undefined
+
+    // Crypto accounts use a different table format
+    if (accountType === 'Other' && /Crypto/i.test(accountTypeLabel ?? '')) {
+      const holdings = parseCryptoHoldings(text)
+      return holdings.length > 0 ? holdings : undefined
+    }
+
+    // Investment accounts
+    const holdings = parseInvestmentHoldings(text)
+
+    // Also parse the cash balance from the asset allocation summary
+    const cashHolding = parseCashHolding(text)
+    if (cashHolding) holdings.push(cashHolding)
+
+    return holdings.length > 0 ? holdings : undefined
+  } catch {
+    // Holdings failure should never break value parsing
+    return undefined
+  }
+}
+
 export function parseWealthsimple(text: string): ParsedStatement {
   let accountType: AccountType | null = null
   let accountTypeLabel: string | null = null
@@ -172,6 +284,7 @@ export function parseWealthsimple(text: string): ParsedStatement {
     value,
     valueContext,
     candidates: genericCandidates(text),
+    holdings: parseHoldings(text, accountType, accountTypeLabel),
   }
 }
 

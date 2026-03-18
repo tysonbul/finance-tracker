@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { ArrowLeft, Upload, Trash2, TrendingUp, TrendingDown, PenLine } from 'lucide-react'
+import { ArrowLeft, Upload, Trash2, TrendingUp, TrendingDown, PenLine, PieChart } from 'lucide-react'
 import {
   LineChart,
   Line,
@@ -13,6 +13,8 @@ import { Account } from '../types'
 import { useFinance } from '../context/FinanceContext'
 import { formatCurrencyFull, formatMonth } from '../utils/formatters'
 import UploadModal from './UploadModal'
+import HoldingsBreakdown from './HoldingsBreakdown'
+import HoldingsEditor from './HoldingsEditor'
 
 interface AccountDetailProps {
   account: Account
@@ -26,10 +28,12 @@ const formatY = (v: number) => {
 }
 
 export default function AccountDetail({ account, onBack }: AccountDetailProps) {
-  const { deleteAccount, deleteEntry, addEntry } = useFinance()
+  const { deleteAccount, deleteEntry, addEntry, updateEntryHoldings } = useFinance()
   const [showUpload, setShowUpload] = useState(false)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [showManualEntry, setShowManualEntry] = useState(false)
+  const [chartView, setChartView] = useState<'value' | 'holdings'>('value')
+  const [showHoldingsEditor, setShowHoldingsEditor] = useState(false)
   const [manualMonth, setManualMonth] = useState('')
   const [manualValue, setManualValue] = useState('')
 
@@ -78,11 +82,18 @@ export default function AccountDetail({ account, onBack }: AccountDetailProps) {
 
         <div className="flex items-center gap-2 md:shrink-0">
           <button
+            onClick={() => setShowHoldingsEditor(true)}
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-[#1e2235] text-sm font-semibold text-gray-300 hover:text-white hover:bg-[#1a1e2e] transition-all"
+          >
+            <PieChart size={14} />
+            <span className="hidden sm:inline">Edit Holdings</span>
+          </button>
+          <button
             onClick={() => setShowManualEntry(true)}
             className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-[#1e2235] text-sm font-semibold text-gray-300 hover:text-white hover:bg-[#1a1e2e] transition-all"
           >
             <PenLine size={14} />
-            Manual Entry
+            <span className="hidden sm:inline">Manual Entry</span>
           </button>
           <button
             onClick={() => setShowUpload(true)}
@@ -109,54 +120,94 @@ export default function AccountDetail({ account, onBack }: AccountDetailProps) {
         </div>
       )}
 
-      {/* Chart */}
-      {sorted.length > 1 && (
-        <div className="bg-[#12151f] border border-[#1e2235] rounded-2xl p-6">
-          <h2 className="text-sm font-semibold text-gray-300 mb-6">Value Over Time</h2>
-          <div className="h-40 md:h-52">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={chartData} margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#1e2235" vertical={false} />
-                <XAxis
-                  dataKey="month"
-                  tickFormatter={formatMonth}
-                  tick={{ fill: '#6b7280', fontSize: 10 }}
-                  axisLine={false}
-                  tickLine={false}
-                  dy={8}
-                />
-                <YAxis
-                  tickFormatter={formatY}
-                  tick={{ fill: '#6b7280', fontSize: 10 }}
-                  axisLine={false}
-                  tickLine={false}
-                  dx={-4}
-                  width={55}
-                />
-                <Tooltip
-                  content={({ active, payload, label }) => {
-                    if (!active || !payload?.length) return null
-                    return (
-                      <div className="bg-[#12151f] border border-[#1e2235] rounded-xl p-3 shadow-xl">
-                        <p className="text-xs text-gray-400 mb-1">{formatMonth(label as string)}</p>
-                        <p className="text-sm font-bold font-mono" style={{ color: account.color }}>
-                          {formatCurrencyFull(payload[0].value as number)}
-                        </p>
-                      </div>
-                    )
-                  }}
-                />
-                <Line
-                  type="monotone"
-                  dataKey="value"
-                  stroke={account.color}
-                  strokeWidth={2.5}
-                  dot={{ fill: account.color, strokeWidth: 0, r: 3 }}
-                  activeDot={{ r: 5, strokeWidth: 0 }}
-                />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
+      {/* Chart / Holdings toggle */}
+      {(sorted.length > 1 || (latest?.holdings && latest.holdings.length > 0)) && (
+        <div className="bg-[#12151f] border border-[#1e2235] rounded-2xl p-4 md:p-6">
+          {latest?.holdings && latest.holdings.length > 0 && sorted.length > 1 ? (
+            <div className="flex items-center justify-between mb-4 md:mb-6">
+              <h2 className="text-sm font-semibold text-gray-300">
+                {chartView === 'value' ? 'Value Over Time' : 'Holdings'}
+              </h2>
+              <div className="flex gap-1 p-0.5 bg-[#0a0d14] border border-[#1e2235] rounded-lg">
+                <button
+                  onClick={() => setChartView('value')}
+                  className={`px-3 py-1 rounded-md text-xs font-medium transition-all ${
+                    chartView === 'value' ? 'bg-app-accent text-[#0a0d14]' : 'text-gray-400 hover:text-white'
+                  }`}
+                >
+                  Value
+                </button>
+                <button
+                  onClick={() => setChartView('holdings')}
+                  className={`px-3 py-1 rounded-md text-xs font-medium transition-all ${
+                    chartView === 'holdings' ? 'bg-app-accent text-[#0a0d14]' : 'text-gray-400 hover:text-white'
+                  }`}
+                >
+                  Holdings
+                </button>
+              </div>
+            </div>
+          ) : (
+            <h2 className="text-sm font-semibold text-gray-300 mb-4 md:mb-6">
+              {latest?.holdings && latest.holdings.length > 0 ? 'Holdings' : 'Value Over Time'}
+            </h2>
+          )}
+
+          {chartView === 'value' && sorted.length > 1 && (
+            <div className="h-40 md:h-52">
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={chartData} margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#1e2235" vertical={false} />
+                  <XAxis
+                    dataKey="month"
+                    tickFormatter={formatMonth}
+                    tick={{ fill: '#6b7280', fontSize: 10 }}
+                    axisLine={false}
+                    tickLine={false}
+                    dy={8}
+                  />
+                  <YAxis
+                    tickFormatter={formatY}
+                    tick={{ fill: '#6b7280', fontSize: 10 }}
+                    axisLine={false}
+                    tickLine={false}
+                    dx={-4}
+                    width={55}
+                  />
+                  <Tooltip
+                    content={({ active, payload, label }) => {
+                      if (!active || !payload?.length) return null
+                      return (
+                        <div className="bg-[#12151f] border border-[#1e2235] rounded-xl p-3 shadow-xl">
+                          <p className="text-xs text-gray-400 mb-1">{formatMonth(label as string)}</p>
+                          <p className="text-sm font-bold font-mono" style={{ color: account.color }}>
+                            {formatCurrencyFull(payload[0].value as number)}
+                          </p>
+                        </div>
+                      )
+                    }}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="value"
+                    stroke={account.color}
+                    strokeWidth={2.5}
+                    dot={{ fill: account.color, strokeWidth: 0, r: 3 }}
+                    activeDot={{ r: 5, strokeWidth: 0 }}
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+
+          {chartView === 'holdings' && latest?.holdings && latest.holdings.length > 0 && (
+            <HoldingsBreakdown holdings={latest.holdings} conversionRates={latest.conversionRates} />
+          )}
+
+          {/* If only holdings exist (no chart data), force show holdings */}
+          {chartView === 'value' && sorted.length <= 1 && latest?.holdings && latest.holdings.length > 0 && (
+            <HoldingsBreakdown holdings={latest.holdings} conversionRates={latest.conversionRates} />
+          )}
         </div>
       )}
 
@@ -276,6 +327,15 @@ export default function AccountDetail({ account, onBack }: AccountDetailProps) {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Holdings Editor */}
+      {showHoldingsEditor && latest && (
+        <HoldingsEditor
+          holdings={latest.holdings ?? []}
+          onSave={(holdings) => updateEntryHoldings(account.id, latest.id, holdings)}
+          onClose={() => setShowHoldingsEditor(false)}
+        />
       )}
 
       {/* Upload Modal */}

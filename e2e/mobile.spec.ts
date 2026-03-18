@@ -575,3 +575,130 @@ test.describe('PWA Metadata', () => {
     await expect(page.locator('link[rel="icon"][type="image/svg+xml"]')).toHaveAttribute('href', /icon\.svg/)
   })
 })
+
+// ─── Holdings ─────────────────────────────────────────────
+
+/** Seed app data with holdings via localStorage */
+async function seedDataWithHoldings(page: Page) {
+  const appData = {
+    version: 2,
+    accounts: [
+      {
+        id: 'acct-tfsa',
+        name: 'Wealthsimple TFSA',
+        type: 'TFSA',
+        institution: 'Wealthsimple',
+        institutionId: 'wealthsimple',
+        color: '#00d395',
+        entries: [
+          {
+            id: 'e1',
+            yearMonth: '2026-01',
+            value: 240905.24,
+            uploadedAt: '2026-02-01T00:00:00Z',
+            sourceFilename: 'January_2026.pdf',
+            holdings: [
+              { symbol: 'VFV', quantity: 492.46, marketPrice: 167.64, marketValue: 82556.81, bookCost: 52498.53, currency: 'CAD' },
+              { symbol: 'VXC', quantity: 697.74, marketPrice: 75.39, marketValue: 52602.50, bookCost: 39116.23, currency: 'CAD' },
+              { symbol: 'XQQ', quantity: 548.44, marketPrice: 62.90, marketValue: 34497.04, bookCost: 24952.91, currency: 'CAD' },
+              { symbol: 'NVDA', quantity: 117.08, marketPrice: 191.13, marketValue: 22378.05, bookCost: 2492.25, currency: 'USD' },
+            ],
+          },
+        ],
+      },
+      {
+        id: 'acct-rrsp',
+        name: 'Wealthsimple RRSP',
+        type: 'RRSP',
+        institution: 'Wealthsimple',
+        institutionId: 'wealthsimple',
+        color: '#5B8AF5',
+        entries: [
+          {
+            id: 'e2',
+            yearMonth: '2026-01',
+            value: 172244.00,
+            uploadedAt: '2026-02-01T00:00:00Z',
+            sourceFilename: 'January_2026.pdf',
+            holdings: [
+              { symbol: 'VFV', quantity: 844.41, marketPrice: 167.64, marketValue: 141557.12, bookCost: 104686.35, currency: 'CAD' },
+              { symbol: 'TEC', quantity: 318.75, marketPrice: 52.31, marketValue: 16673.79, bookCost: 11089.14, currency: 'CAD' },
+            ],
+          },
+        ],
+      },
+    ],
+    creditCardAccounts: [],
+    cashFlowConfig: { incomeRecords: [], fixedExpenses: [], ccAdjustments: [] },
+  }
+  await page.goto('/')
+  await page.evaluate((data) => {
+    localStorage.setItem('finance-tracker-v1', JSON.stringify(data))
+  }, appData)
+  await page.reload()
+}
+
+test.describe('Holdings — Account Detail', () => {
+  test('shows holdings via toggle on account detail', async ({ page }) => {
+    await seedDataWithHoldings(page)
+    await tapBottomNav(page, 'Accounts')
+    await page.getByText('Wealthsimple TFSA').click()
+
+    // Default view shows "Value Over Time"
+    await expect(page.getByText('Value Over Time')).toBeVisible()
+
+    // Click Holdings toggle
+    await page.getByRole('button', { name: 'Holdings' }).click()
+
+    // Should show symbols in the table
+    await expect(page.getByText('VFV')).toBeVisible()
+    await expect(page.getByText('VXC')).toBeVisible()
+    await expect(page.getByText('XQQ')).toBeVisible()
+    await expect(page.getByText('NVDA')).toBeVisible()
+  })
+
+  test('holdings table shows percentages and values', async ({ page }) => {
+    await seedDataWithHoldings(page)
+    await tapBottomNav(page, 'Accounts')
+    await page.getByText('Wealthsimple TFSA').click()
+
+    // Switch to Holdings view
+    await page.getByRole('button', { name: 'Holdings' }).click()
+
+    // Table should have a Total row
+    await expect(page.getByText('Total')).toBeVisible()
+
+    // Check that percentage column has values
+    const percentCells = page.locator('td:has-text("%")')
+    await expect(percentCells.first()).toBeVisible()
+  })
+})
+
+test.describe('Holdings — Save Tab Portfolio Distribution', () => {
+  test('Save tab shows portfolio distribution via toggle', async ({ page }) => {
+    await seedDataWithHoldings(page)
+
+    // Click Holdings toggle on the chart card
+    await page.getByRole('button', { name: 'Holdings' }).click()
+
+    // Should show "Portfolio Distribution" heading
+    await expect(page.getByText('Portfolio Distribution')).toBeVisible()
+
+    // VFV is in both accounts, should appear in aggregate
+    await expect(page.getByText('VFV')).toBeVisible()
+  })
+
+  test('Save tab aggregates same symbol across accounts', async ({ page }) => {
+    await seedDataWithHoldings(page)
+    await page.getByRole('button', { name: 'Holdings' }).click()
+
+    // VFV appears in both TFSA and RRSP — its account label should list both
+    await expect(page.getByText('Wealthsimple TFSA, Wealthsimple RRSP')).toBeVisible()
+  })
+
+  test('No holdings toggle when no holdings data', async ({ page }) => {
+    await page.goto('/')
+    // The Holdings toggle button should not exist when there's no holdings data
+    await expect(page.getByRole('button', { name: 'Holdings' })).not.toBeVisible()
+  })
+})

@@ -1,9 +1,11 @@
 import { useState } from 'react'
 import { TrendingUp, TrendingDown, Plus } from 'lucide-react'
 import { useFinance } from '../context/FinanceContext'
+import { Holding } from '../types'
 import NetWorthChart from './NetWorthChart'
 import SpendDashboard from './SpendDashboard'
 import CashFlowDashboard from './CashFlowDashboard'
+import HoldingsBreakdown from './HoldingsBreakdown'
 import { formatCurrencyFull, formatCurrency, formatMonth } from '../utils/formatters'
 
 interface DashboardProps {
@@ -13,10 +15,13 @@ interface DashboardProps {
 
 type DashTab = 'save' | 'spend' | 'cash-flow'
 
+const CASH_ACCOUNT_TYPES = new Set(['Cash', 'Other'])
+
 export default function Dashboard({ onGoToAccounts, onGoToAccount }: DashboardProps) {
   const { data } = useFinance()
   const { accounts } = data
   const [tab, setTab] = useState<DashTab>('save')
+  const [chartView, setChartView] = useState<'value' | 'holdings'>('value')
 
   // Calculate net worth (sum of latest entry per account)
   const latestValues = accounts.map((a) => {
@@ -126,11 +131,121 @@ export default function Dashboard({ onGoToAccounts, onGoToAccount }: DashboardPr
         </div>
       </div>
 
-      {/* Chart */}
-      <div className="bg-[#12151f] border border-[#1e2235] rounded-2xl p-4 md:p-6">
-        <h2 className="text-sm font-semibold text-gray-300 mb-4 md:mb-6">Portfolio Over Time</h2>
-        <NetWorthChart accounts={accounts} />
-      </div>
+      {/* Chart / Portfolio Distribution toggle */}
+      {(() => {
+        // Compute aggregate holdings for the distribution view
+        interface AggregateHolding extends Holding { accounts: string[] }
+        const symbolMap = new Map<string, AggregateHolding>()
+        let cashTotal = 0
+        const cashAccountNames: string[] = []
+
+        for (const account of accounts) {
+          const sorted = [...account.entries].sort((a, b) => b.yearMonth.localeCompare(a.yearMonth))
+          const latest = sorted[0]
+          if (!latest) continue
+
+          // Only treat as cash if it's a Cash/Other type AND has no holdings
+          // (e.g. Crypto accounts are type 'Other' but have holdings)
+          const hasHoldingsData = sorted.some((e) => e.holdings && e.holdings.length > 0)
+          if (CASH_ACCOUNT_TYPES.has(account.type) && !hasHoldingsData) {
+            cashTotal += latest.value
+            cashAccountNames.push(account.name)
+            continue
+          }
+
+          const latestWithHoldings = sorted.find((e) => e.holdings && e.holdings.length > 0)
+          if (latestWithHoldings?.holdings) {
+            for (const h of latestWithHoldings.holdings) {
+              const existing = symbolMap.get(h.symbol)
+              if (existing) {
+                existing.quantity += h.quantity
+                existing.marketValue += h.marketValue
+                existing.bookCost += h.bookCost
+                existing.marketPrice = existing.marketValue / existing.quantity
+                if (!existing.accounts.includes(account.name)) {
+                  existing.accounts.push(account.name)
+                }
+              } else {
+                symbolMap.set(h.symbol, { ...h, accounts: [account.name] })
+              }
+            }
+          }
+        }
+
+        // Merge Cash-type account values into the "Cash" symbol from holdings
+        if (cashTotal > 0) {
+          const existingCash = symbolMap.get('Cash')
+          if (existingCash) {
+            existingCash.marketValue += cashTotal
+            existingCash.bookCost += cashTotal
+            existingCash.marketPrice = existingCash.marketValue
+            for (const name of cashAccountNames) {
+              if (!existingCash.accounts.includes(name)) existingCash.accounts.push(name)
+            }
+          } else {
+            symbolMap.set('Cash', {
+              symbol: 'Cash',
+              quantity: 1,
+              marketPrice: cashTotal,
+              marketValue: cashTotal,
+              bookCost: cashTotal,
+              currency: 'CAD',
+              accounts: cashAccountNames,
+            })
+          }
+        }
+
+        const aggregated = [...symbolMap.values()]
+
+        // Find the most recent conversionRates from any entry
+        const latestRates = accounts
+          .flatMap((a) => a.entries)
+          .filter((e) => e.conversionRates)
+          .sort((a, b) => b.yearMonth.localeCompare(a.yearMonth))[0]?.conversionRates
+
+        const hasHoldings = aggregated.length > 0
+        const accountLabels: Record<string, string[]> = {}
+        for (const h of aggregated) {
+          if ((h as AggregateHolding).accounts.length > 0) {
+            accountLabels[h.symbol] = (h as AggregateHolding).accounts
+          }
+        }
+
+        return (
+          <div className="bg-[#12151f] border border-[#1e2235] rounded-2xl p-4 md:p-6">
+            <div className="flex items-center justify-between mb-4 md:mb-6">
+              <h2 className="text-sm font-semibold text-gray-300">
+                {chartView === 'value' ? 'Portfolio Over Time' : 'Portfolio Distribution'}
+              </h2>
+              {hasHoldings && (
+                <div className="flex gap-1 p-0.5 bg-[#0a0d14] border border-[#1e2235] rounded-lg">
+                  <button
+                    onClick={() => setChartView('value')}
+                    className={`px-3 py-1 rounded-md text-xs font-medium transition-all ${
+                      chartView === 'value' ? 'bg-app-accent text-[#0a0d14]' : 'text-gray-400 hover:text-white'
+                    }`}
+                  >
+                    Value
+                  </button>
+                  <button
+                    onClick={() => setChartView('holdings')}
+                    className={`px-3 py-1 rounded-md text-xs font-medium transition-all ${
+                      chartView === 'holdings' ? 'bg-app-accent text-[#0a0d14]' : 'text-gray-400 hover:text-white'
+                    }`}
+                  >
+                    Holdings
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {chartView === 'value' && <NetWorthChart accounts={accounts} />}
+            {chartView === 'holdings' && hasHoldings && (
+              <HoldingsBreakdown holdings={aggregated} accountLabels={accountLabels} conversionRates={latestRates} />
+            )}
+          </div>
+        )
+      })()}
 
       {/* Account Cards */}
       <div>

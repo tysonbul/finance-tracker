@@ -9,12 +9,23 @@ export type AccountType =
   | 'Cash'
   | 'Other'
 
+export interface Holding {
+  symbol: string        // "XQQ", "ETH"
+  quantity: number      // total quantity held
+  marketPrice: number   // price per unit
+  marketValue: number   // total market value
+  bookCost: number      // total book cost
+  currency: string      // "CAD" or "USD" (from price currency)
+}
+
 export interface AccountEntry {
   id: string
   yearMonth: string // 'YYYY-MM'
   value: number
   uploadedAt: string // ISO timestamp
   sourceFilename: string
+  holdings?: Holding[]
+  conversionRates?: Record<string, number> // currency→CAD rates at statement date (e.g. { USD: 1.37, EUR: 1.52 })
 }
 
 export interface Account {
@@ -106,6 +117,7 @@ export interface ParsedStatement {
   value: number | null
   valueContext: string | null        // surrounding text for user to verify
   candidates: PdfCandidate[]         // all dollar amounts found, for fallback
+  holdings?: Holding[]               // parsed investment holdings, if any
 }
 
 /** Result of credit card PDF parsing */

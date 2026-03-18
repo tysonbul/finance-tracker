@@ -30,6 +30,9 @@ import {
   parseRogers,
   parseWealthsimple,
   parseWealthsimpleCredit,
+  parseInvestmentHoldings,
+  parseCryptoHoldings,
+  parseCashHolding,
 } from '../src/utils/pdfParser'
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -216,3 +219,128 @@ wsAccountSuite('LIRA', 'LIRA')           // will fail if AccountType / WS_ACCOUN
 wsAccountSuite('Non-Registered', 'Non-Registered')
 wsAccountSuite('Chequing', 'Cash')
 wsAccountSuite('Crypto', 'Other')
+
+// ─── Holdings Parsing ────────────────────────────────────────────────────────
+
+/** Investment account types that should have holdings */
+const HOLDINGS_ACCOUNTS = ['TFSA', 'FHSA', 'RRSP', 'LIRA', 'Non-Registered'] as const
+
+for (const acctType of HOLDINGS_ACCOUNTS) {
+  describe.skipIf(!hasSamples)(`Holdings — ${acctType}`, () => {
+    const files = pdfs(`Wealthsimple/${acctType}`)
+
+    test.each(files.map((f) => [label(f), f]))(
+      '%s',
+      async (_label, filePath) => {
+        const text = await extractTextFromPdf(filePath)
+        const holdings = parseInvestmentHoldings(text)
+
+        expect(holdings.length, `no holdings found in: ${filePath}`).toBeGreaterThan(0)
+
+        for (const h of holdings) {
+          expect(h.symbol).toMatch(/^[A-Z]{2,5}$/)
+          expect(h.quantity).toBeGreaterThan(0)
+          expect(h.marketPrice).toBeGreaterThanOrEqual(0)
+          expect(h.marketValue).toBeGreaterThanOrEqual(0)
+          expect(h.bookCost).toBeGreaterThanOrEqual(0)
+          expect(['CAD', 'USD']).toContain(h.currency)
+        }
+      },
+    )
+  })
+}
+
+describe.skipIf(!hasSamples)('Holdings — Crypto', () => {
+  const files = pdfs('Wealthsimple/Crypto')
+
+  test.each(files.map((f) => [label(f), f]))(
+    '%s',
+    async (_label, filePath) => {
+      const text = await extractTextFromPdf(filePath)
+      const holdings = parseCryptoHoldings(text)
+
+      expect(holdings.length, `no crypto holdings found in: ${filePath}`).toBeGreaterThan(0)
+
+      for (const h of holdings) {
+        expect(h.symbol).toMatch(/^[A-Z]{2,6}$/)
+        expect(h.quantity).toBeGreaterThanOrEqual(0)
+        expect(h.marketPrice).toBeGreaterThanOrEqual(0)
+        expect(h.marketValue).toBeGreaterThanOrEqual(0)
+        expect(h.bookCost).toBeGreaterThanOrEqual(0)
+        expect(['CAD', 'USD']).toContain(h.currency)
+      }
+    },
+  )
+})
+
+describe.skipIf(!hasSamples)('Holdings — Chequing (should have none)', () => {
+  const files = pdfs('Wealthsimple/Chequing')
+
+  test.each(files.map((f) => [label(f), f]))(
+    '%s',
+    async (_label, filePath) => {
+      const text = await extractTextFromPdf(filePath)
+      const result = parseWealthsimple(text)
+      expect(result.holdings).toBeUndefined()
+    },
+  )
+})
+
+describe.skipIf(!hasSamples)('Holdings — Cash balance from asset allocation', () => {
+  for (const acctType of ['TFSA', 'FHSA', 'RRSP', 'LIRA', 'Non-Registered']) {
+    const files = pdfs(`Wealthsimple/${acctType}`)
+    test.each(files.map((f) => [label(f), f]))(
+      `${acctType} %s has cash holding`,
+      async (_label, filePath) => {
+        const text = await extractTextFromPdf(filePath)
+        const cash = parseCashHolding(text)
+
+        // Cash holding should be found (may be $0 in some statements but the section exists)
+        expect(cash).not.toBeNull()
+        expect(cash!.symbol).toBe('Cash')
+        expect(cash!.marketValue).toBeGreaterThanOrEqual(0)
+        expect(cash!.currency).toBe('CAD')
+      },
+    )
+  }
+
+  test('parseWealthsimple includes Cash in holdings array', async () => {
+    const files = pdfs('Wealthsimple/TFSA')
+    if (files.length === 0) return
+    const text = await extractTextFromPdf(files[0])
+    const result = parseWealthsimple(text)
+
+    expect(result.holdings).toBeDefined()
+    const cashHolding = result.holdings!.find((h) => h.symbol === 'Cash')
+    expect(cashHolding).toBeDefined()
+    expect(cashHolding!.marketValue).toBeGreaterThanOrEqual(0)
+  })
+})
+
+describe.skipIf(!hasSamples)('Holdings — integrated via parseWealthsimple', () => {
+  test('TFSA statement includes holdings in parsed result', async () => {
+    const files = pdfs('Wealthsimple/TFSA')
+    if (files.length === 0) return
+
+    const text = await extractTextFromPdf(files[0])
+    const result = parseWealthsimple(text)
+
+    expect(result.holdings).toBeDefined()
+    expect(result.holdings!.length).toBeGreaterThan(0)
+    // Holdings should not affect value parsing
+    expect(result.value).not.toBeNull()
+    expect(result.value).toBeGreaterThan(0)
+  })
+
+  test('Crypto statement includes holdings in parsed result', async () => {
+    const files = pdfs('Wealthsimple/Crypto')
+    if (files.length === 0) return
+
+    const text = await extractTextFromPdf(files[0])
+    const result = parseWealthsimple(text)
+
+    expect(result.holdings).toBeDefined()
+    expect(result.holdings!.length).toBeGreaterThan(0)
+    expect(result.value).not.toBeNull()
+  })
+})

@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useCallback, useEffect, useRef } from 'react'
-import { Account, AccountEntry, AccountType, AppData, CreditCardAccount, CreditCardEntry, IncomeRecord, FixedExpense, CCAdjustment } from '../types'
+import { Account, AccountEntry, AccountType, AppData, CreditCardAccount, CreditCardEntry, Holding, IncomeRecord, FixedExpense, CCAdjustment } from '../types'
 import { loadData, saveData } from '../utils/storage'
 
 const ACCOUNT_COLORS = [
@@ -53,6 +53,7 @@ interface FinanceContextValue {
     entry: Omit<AccountEntry, 'id' | 'uploadedAt'>,
   ) => void
   deleteEntry: (accountId: string, entryId: string) => void
+  updateEntryHoldings: (accountId: string, entryId: string, holdings: Holding[]) => void
   replaceData: (data: AppData) => void
   // Credit card methods
   addCreditCardAccount: (data: NewCreditCardAccountData) => void
@@ -127,10 +128,18 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
         ...prev,
         accounts: prev.accounts.map((a) => {
           if (a.id !== accountId) return a
+          // Preserve existing holdings and conversion rates when re-uploading without them
+          const existing = a.entries.find((e) => e.yearMonth === entry.yearMonth)
+          let mergedEntry = !entry.holdings && existing?.holdings
+            ? { ...entry, holdings: existing.holdings }
+            : entry
+          if (!mergedEntry.conversionRates && existing?.conversionRates) {
+            mergedEntry = { ...mergedEntry, conversionRates: existing.conversionRates }
+          }
           const filtered = a.entries.filter((e) => e.yearMonth !== entry.yearMonth)
           return {
             ...a,
-            entries: [...filtered, makeEntry(entry)].sort((x, y) =>
+            entries: [...filtered, makeEntry(mergedEntry)].sort((x, y) =>
               x.yearMonth.localeCompare(y.yearMonth),
             ),
           }
@@ -166,6 +175,21 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
       accounts: prev.accounts.map((a) => {
         if (a.id !== accountId) return a
         return { ...a, entries: a.entries.filter((e) => e.id !== entryId) }
+      }),
+    }))
+  }, [])
+
+  const updateEntryHoldings = useCallback((accountId: string, entryId: string, holdings: Holding[]) => {
+    setData((prev) => ({
+      ...prev,
+      accounts: prev.accounts.map((a) => {
+        if (a.id !== accountId) return a
+        return {
+          ...a,
+          entries: a.entries.map((e) =>
+            e.id !== entryId ? e : { ...e, holdings: holdings.length > 0 ? holdings : undefined },
+          ),
+        }
       }),
     }))
   }, [])
@@ -351,6 +375,7 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
         addEntry,
         addAccountWithEntry,
         deleteEntry,
+        updateEntryHoldings,
         replaceData,
         addCreditCardAccount,
         deleteCreditCardAccount,
